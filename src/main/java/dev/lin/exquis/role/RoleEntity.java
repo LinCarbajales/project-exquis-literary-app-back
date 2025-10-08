@@ -1,7 +1,10 @@
 package dev.lin.exquis.role;
 
+import java.util.Set;
+
 import jakarta.persistence.*;
 import lombok.*;
+import dev.lin.exquis.user.UserEntity;
 
 @Entity
 @Table(name = "roles")
@@ -9,20 +12,16 @@ import lombok.*;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class RoleEntity {
 
+public class RoleEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_role")
-    private Long id;
+    private Long id_role;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 20, unique = true, nullable = false)
-    private RoleName name;
+    @Column(unique = true)
+    private String name;
 
-    public enum RoleName {
-        ROLE_USER,
-        ROLE_ADMIN
-    }
+    @ManyToMany(mappedBy = "roles")
+    private Set<UserEntity> users;
+
 }

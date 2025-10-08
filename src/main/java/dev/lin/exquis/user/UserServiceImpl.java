@@ -1,7 +1,6 @@
 package dev.lin.exquis.user;
 
 import dev.lin.exquis.role.RoleEntity;
-import dev.lin.exquis.role.RoleEntity.RoleName;
 import dev.lin.exquis.role.RoleRepository;
 import dev.lin.exquis.user.dtos.UserRequestDTO;
 import dev.lin.exquis.user.dtos.UserResponseDTO;
@@ -44,16 +43,18 @@ public class UserServiceImpl implements UserService {
                 .password(passwordEncoder.encode(dto.password()))
                 .name(dto.name())
                 .surname(dto.surname())
+                .password(passwordEncoder.encode(dto.password())) 
                 .build();
 
         Set<RoleEntity> userRoles = new HashSet<>();
         if (dto.roles() == null || dto.roles().isEmpty()) {
-            RoleEntity defaultRole = roleRepository.findByName(RoleName.ROLE_USER)
+            RoleEntity defaultRole = roleRepository.findByName("USER")
                     .orElseThrow(() -> new RuntimeException("Rol USER no encontrado"));
             userRoles.add(defaultRole);
         } else {
             for (String roleName : dto.roles()) {
-                RoleEntity role = roleRepository.findByName(RoleName.valueOf(roleName))
+                // Añadir ROLE_ si no lo tiene
+                RoleEntity role = roleRepository.findByName(roleName)
                         .orElseThrow(() -> new RuntimeException("Rol " + roleName + " no encontrado"));
                 userRoles.add(role);
             }
@@ -62,7 +63,6 @@ public class UserServiceImpl implements UserService {
 
         UserEntity savedUser = userRepository.save(user);
         log.info("Usuario {} registrado con ID {}", savedUser.getUsername(), savedUser.getId());
-
         return mapToResponseDTO(savedUser);
     }
 
@@ -95,8 +95,8 @@ public class UserServiceImpl implements UserService {
 
         if (dto.roles() != null && !dto.roles().isEmpty()) {
             Set<RoleEntity> newRoles = dto.roles().stream()
-                    .map(r -> roleRepository.findByName(RoleName.valueOf(r))
-                            .orElseThrow(() -> new RuntimeException("Rol " + r + " no encontrado")))
+                    .map(roleName -> roleRepository.findByName(roleName)
+                            .orElseThrow(() -> new RuntimeException("Rol " + roleName + " no encontrado")))
                     .collect(Collectors.toSet());
             user.setRoles(newRoles);
         }
@@ -117,7 +117,7 @@ public class UserServiceImpl implements UserService {
 
     private UserResponseDTO mapToResponseDTO(UserEntity user) {
         Set<String> roleNames = user.getRoles().stream()
-                .map(r -> r.getName().name())
+                .map(RoleEntity::getName)
                 .collect(Collectors.toSet());
 
         return new UserResponseDTO(
