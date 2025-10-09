@@ -6,6 +6,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import static org.springframework.security.config.Customizer.withDefaults;
 
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
@@ -13,8 +17,10 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import dev.lin.exquis.security.JpaUserDetailsService;
+import dev.lin.exquis.security.JwtAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -24,9 +30,13 @@ public class SecurityConfiguration {
     private String endpoint;
 
     private final JpaUserDetailsService jpaUserDetailsService;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfiguration(JpaUserDetailsService jpaUserDetailsService) {
+    public SecurityConfiguration(
+            JpaUserDetailsService jpaUserDetailsService,
+            JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jpaUserDetailsService = jpaUserDetailsService;
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
@@ -34,10 +44,7 @@ public class SecurityConfiguration {
         http
             // --- CORS & CSRF ---
             .cors(withDefaults())
-            .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/h2-console/**")
-                .disable()
-            )
+            .csrf(csrf -> csrf.disable()) // Desactivar CSRF (JWT no lo necesita)
 
             // --- Headers ---
             .headers(headers -> headers
@@ -49,36 +56,47 @@ public class SecurityConfiguration {
 
             // --- Autorización de endpoints ---
             .authorizeHttpRequests(auth -> auth
-                // acceso total a H2 y endpoints públicos
+                // Acceso público
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
-                .requestMatchers(HttpMethod.GET, endpoint + "/login").permitAll()
-                // logout también debe ser accesible
-                .requestMatchers(HttpMethod.GET, endpoint + "/logout").permitAll()
+                .requestMatchers(HttpMethod.POST, endpoint + "/login").permitAll() // Cambiado a POST
+                .requestMatchers(HttpMethod.POST, endpoint + "/logout").permitAll() // Cambiado a POST
 
-                // cualquier otro endpoint requerirá autenticación
+                // Cualquier otro endpoint requiere autenticación
                 .anyRequest().authenticated()
             )
 
-            // --- Servicio de usuarios ---
-            .userDetailsService(jpaUserDetailsService)
-
-            // --- Autenticación básica (para pruebas o APIs sin JWT aún) ---
-            .httpBasic(withDefaults())
-
-            // --- Logout ---
-            .logout(logout -> logout
-                .logoutUrl(endpoint + "/logout")
-                .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID")
+            // --- Gestión de sesión: STATELESS (sin sesiones, usamos JWT) ---
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
 
-            // --- Gestión de sesión ---
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-            );
+            // --- Proveedor de autenticación ---
+            .authenticationProvider(authenticationProvider())
+
+            // --- Añadir el filtro JWT antes del filtro de autenticación por defecto ---
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Proveedor de autenticación que usa nuestro UserDetailsService
+     */
+    @Bean
+    AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(jpaUserDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
+    }
+
+    /**
+     * AuthenticationManager para poder autenticar manualmente en el login
+     */
+    @Bean
+    AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 
     @Bean
