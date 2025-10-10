@@ -29,19 +29,22 @@ public class SecurityUser implements UserDetails {
     }
 
     @Override
-      public Collection<? extends GrantedAuthority> getAuthorities() {
+    public Collection<? extends GrantedAuthority> getAuthorities() {
         Collection<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
 
         for (RoleEntity role : user.getRoles()) {
             System.out.println("User role : " + role.getName());
-            SimpleGrantedAuthority authority = new SimpleGrantedAuthority(role.getName());
+            String roleName = role.getName().startsWith("ROLE_") 
+                ? role.getName() 
+                : "ROLE_" + role.getName();
+            
+            SimpleGrantedAuthority authority = new SimpleGrantedAuthority(roleName);
             authorities.add(authority);
         }
 
         return authorities;
     }
 
-   
     @Override
     public boolean isAccountNonExpired() {
         return true;
@@ -62,4 +65,8 @@ public class SecurityUser implements UserDetails {
         return true;
     }
 
+    // Método útil para obtener el UserEntity
+    public UserEntity getUser() {
+        return user;
+    }
 }
