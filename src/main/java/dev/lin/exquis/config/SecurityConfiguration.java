@@ -7,8 +7,6 @@ import org.springframework.http.HttpMethod;
 import static org.springframework.security.config.Customizer.withDefaults;
 
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -44,7 +42,7 @@ public class SecurityConfiguration {
         http
             // --- CORS & CSRF ---
             .cors(withDefaults())
-            .csrf(csrf -> csrf.disable()) // Desactivar CSRF (JWT no lo necesita)
+            .csrf(csrf -> csrf.disable())
 
             // --- Headers ---
             .headers(headers -> headers
@@ -59,41 +57,31 @@ public class SecurityConfiguration {
                 // Acceso público
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
-                .requestMatchers(HttpMethod.POST, endpoint + "/login").permitAll() // Cambiado a POST
-                .requestMatchers(HttpMethod.POST, endpoint + "/logout").permitAll() // Cambiado a POST
-
+                .requestMatchers(HttpMethod.POST, endpoint + "/login").permitAll()
+                .requestMatchers(HttpMethod.POST, endpoint + "/logout").permitAll()
+                
+                // 🔒 ENDPOINTS PROTEGIDOS - Requieren autenticación
+                .requestMatchers(endpoint + "/users/me/**").authenticated()
+                .requestMatchers(endpoint + "/users/**").hasRole("ADMIN") // Solo admin puede ver todos los usuarios
+                
                 // Cualquier otro endpoint requiere autenticación
                 .anyRequest().authenticated()
             )
 
-            // --- Gestión de sesión: STATELESS (sin sesiones, usamos JWT) ---
+            // --- Gestión de sesión: STATELESS ---
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
 
-            // --- Proveedor de autenticación ---
-            .authenticationProvider(authenticationProvider())
+            // --- Servicio de usuarios ---
+            .userDetailsService(jpaUserDetailsService)
 
-            // --- Añadir el filtro JWT antes del filtro de autenticación por defecto ---
+            // --- Añadir el filtro JWT ---
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    /**
-     * Proveedor de autenticación que usa nuestro UserDetailsService
-     */
-    @Bean
-    AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(jpaUserDetailsService);
-        authProvider.setPasswordEncoder(passwordEncoder());
-        return authProvider;
-    }
-
-    /**
-     * AuthenticationManager para poder autenticar manualmente en el login
-     */
     @Bean
     AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();

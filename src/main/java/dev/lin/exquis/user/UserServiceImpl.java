@@ -43,7 +43,6 @@ public class UserServiceImpl implements UserService {
                 .password(passwordEncoder.encode(dto.password()))
                 .name(dto.name())
                 .surname(dto.surname())
-                .password(passwordEncoder.encode(dto.password())) 
                 .build();
 
         Set<RoleEntity> userRoles = new HashSet<>();
@@ -53,7 +52,6 @@ public class UserServiceImpl implements UserService {
             userRoles.add(defaultRole);
         } else {
             for (String roleName : dto.roles()) {
-                // Añadir ROLE_ si no lo tiene
                 RoleEntity role = roleRepository.findByName(roleName)
                         .orElseThrow(() -> new RuntimeException("Rol " + roleName + " no encontrado"));
                 userRoles.add(role);
@@ -85,21 +83,7 @@ public class UserServiceImpl implements UserService {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        if (dto.username() != null) user.setUsername(dto.username());
-        if (dto.email() != null) user.setEmail(dto.email());
-        if (dto.name() != null) user.setName(dto.name());
-        if (dto.surname() != null) user.setSurname(dto.surname());
-        if (dto.password() != null && !dto.password().isBlank()) {
-            user.setPassword(passwordEncoder.encode(dto.password()));
-        }
-
-        if (dto.roles() != null && !dto.roles().isEmpty()) {
-            Set<RoleEntity> newRoles = dto.roles().stream()
-                    .map(roleName -> roleRepository.findByName(roleName)
-                            .orElseThrow(() -> new RuntimeException("Rol " + roleName + " no encontrado")))
-                    .collect(Collectors.toSet());
-            user.setRoles(newRoles);
-        }
+        updateUserFields(user, dto);
 
         UserEntity updated = userRepository.save(user);
         log.info("Usuario {} actualizado", updated.getUsername());
@@ -113,6 +97,100 @@ public class UserServiceImpl implements UserService {
         }
         userRepository.deleteById(id);
         log.warn("Usuario con ID {} eliminado", id);
+    }
+
+    /* ==========================================================
+       🔹 MÉTODOS PARA /users/me (por EMAIL)
+       ========================================================== */
+
+    @Override
+    public UserResponseDTO getByEmail(String email) {
+        log.info("Buscando usuario por email: {}", email);
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+        return mapToResponseDTO(user);
+    }
+
+    @Override
+    public UserResponseDTO updateByEmail(String email, UserRequestDTO dto) {
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+
+        updateUserFields(user, dto);
+
+        UserEntity updated = userRepository.save(user);
+        log.info("Usuario {} actualizado mediante /me", updated.getUsername());
+        return mapToResponseDTO(updated);
+    }
+
+    @Override
+    public void deleteByEmail(String email) {
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+        userRepository.delete(user);
+        log.warn("Usuario {} eliminado mediante /me", email);
+    }
+
+    /* ==========================================================
+       🔹 MÉTODOS POR USERNAME (heredados de la interfaz)
+       ========================================================== */
+
+    @Override
+    public UserResponseDTO getByUsername(String username) {
+        UserEntity user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        return mapToResponseDTO(user);
+    }
+
+    @Override
+    public UserResponseDTO updateByUsername(String username, UserRequestDTO dto) {
+        UserEntity user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        updateUserFields(user, dto);
+
+        UserEntity updated = userRepository.save(user);
+        log.info("Usuario {} actualizado", updated.getUsername());
+        return mapToResponseDTO(updated);
+    }
+
+    @Override
+    public void deleteByUsername(String username) {
+        UserEntity user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        userRepository.delete(user);
+        log.warn("Usuario {} eliminado", username);
+    }
+
+    /* ==========================================================
+       🔸 MÉTODO AUXILIAR COMPARTIDO
+       ========================================================== */
+    private void updateUserFields(UserEntity user, UserRequestDTO dto) {
+        if (dto.username() != null && !dto.username().isBlank()) {
+            if (!user.getUsername().equals(dto.username()) && userRepository.existsByUsername(dto.username())) {
+                throw new RuntimeException("El seudónimo ya está en uso");
+            }
+            user.setUsername(dto.username());
+        }
+        if (dto.email() != null && !dto.email().isBlank()) {
+            if (!user.getEmail().equals(dto.email()) && userRepository.existsByEmail(dto.email())) {
+                throw new RuntimeException("El email ya está en uso");
+            }
+            user.setEmail(dto.email());
+        }
+        if (dto.name() != null) user.setName(dto.name());
+        if (dto.surname() != null) user.setSurname(dto.surname());
+        if (dto.password() != null && !dto.password().isBlank()) {
+            user.setPassword(passwordEncoder.encode(dto.password()));
+        }
+
+        if (dto.roles() != null && !dto.roles().isEmpty()) {
+            Set<RoleEntity> newRoles = dto.roles().stream()
+                    .map(roleName -> roleRepository.findByName(roleName)
+                            .orElseThrow(() -> new RuntimeException("Rol " + roleName + " no encontrado")))
+                    .collect(Collectors.toSet());
+            user.setRoles(newRoles);
+        }
     }
 
     private UserResponseDTO mapToResponseDTO(UserEntity user) {

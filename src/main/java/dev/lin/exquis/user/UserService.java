@@ -20,4 +20,14 @@ public interface UserService extends IUserService<UserResponseDTO, UserRequestDT
 
     @Override
     void deleteEntity(Long id);
+
+    // Métodos para /users/me (por EMAIL, que es lo que devuelve Principal)
+    UserResponseDTO getByEmail(String email);
+    UserResponseDTO updateByEmail(String email, UserRequestDTO dto);
+    void deleteByEmail(String email);
+    
+    // Métodos por username (si los necesitas en otro lugar)
+    UserResponseDTO getByUsername(String username);
+    UserResponseDTO updateByUsername(String username, UserRequestDTO dto);
+    void deleteByUsername(String username);
 }
