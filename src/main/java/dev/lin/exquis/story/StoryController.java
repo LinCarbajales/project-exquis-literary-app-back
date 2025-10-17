@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/stories")
+@RequestMapping("${api-endpoint}/stories")
 @RequiredArgsConstructor
 public class StoryController {
 

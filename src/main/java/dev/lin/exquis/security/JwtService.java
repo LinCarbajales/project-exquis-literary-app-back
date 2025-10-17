@@ -16,10 +16,10 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    @Value("${jwt.secret:miClaveSecretaSuperSeguraParaJWT12345678901234567890}")
+    @Value("${jwt.secret}")
     private String secretKey;
 
-    @Value("${jwt.expiration:86400000}") // 24h
+    @Value("${jwt.expiration}")
     private long jwtExpiration;
 
     // ✅ Nuevo método: generar token con ID y email explícitos

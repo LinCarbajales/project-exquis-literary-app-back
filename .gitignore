@@ -33,4 +33,5 @@ build/
 .vscode/
 
 # Excluir archivos de propiedades con variables de entorno
-src/main/resources/env.properties
+env.properties
+*.env

@@ -56,12 +56,16 @@ public class SecurityConfiguration {
             .authorizeHttpRequests(auth -> auth
                 // Acceso público
                 .requestMatchers("/h2-console/**").permitAll()
+                .requestMatchers("/error").permitAll()
+
                 .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
                 .requestMatchers(HttpMethod.POST, endpoint + "/login").permitAll()
                 .requestMatchers(HttpMethod.POST, endpoint + "/logout").permitAll()
                 
                 // 🔒 ENDPOINTS PROTEGIDOS - Requieren autenticación
                 .requestMatchers(endpoint + "/users/me/**").authenticated()
+                .requestMatchers(HttpMethod.POST, endpoint + "/stories/**").authenticated()
+                .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
                 .requestMatchers(endpoint + "/users/**").hasRole("ADMIN") // Solo admin puede ver todos los usuarios
                 
                 // Cualquier otro endpoint requiere autenticación
