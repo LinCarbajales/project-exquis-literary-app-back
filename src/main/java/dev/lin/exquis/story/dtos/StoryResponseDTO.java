@@ -1,13 +1,21 @@
 package dev.lin.exquis.story.dtos;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
-public record StoryResponseDTO(
-    Long id,
-    Integer extension,
-    Boolean finished,
-    String visibility,
-    LocalDateTime createdAt,
-    LocalDateTime updatedAt
-) {
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class StoryResponseDTO {
+    private Long id;
+    private Integer extension;
+    private boolean finished;
+    private String visibility;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }

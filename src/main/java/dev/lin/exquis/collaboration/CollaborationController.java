@@ -36,7 +36,6 @@ public class CollaborationController {
     public CollaborationResponseDTO createCollaboration(
             @RequestBody CollaborationRequestDTO request,
             Authentication authentication) {
-        
         String username = authentication.getName();
         CollaborationEntity created = collaborationService.createCollaboration(request, username);
         return CollaborationResponseDTO.fromEntity(created);

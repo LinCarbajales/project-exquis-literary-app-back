@@ -4,6 +4,7 @@ import dev.lin.exquis.story.StoryEntity;
 import dev.lin.exquis.user.UserEntity;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity

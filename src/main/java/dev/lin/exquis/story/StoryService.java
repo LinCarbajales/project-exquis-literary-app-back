@@ -11,4 +11,6 @@ public interface StoryService extends IStoryService<StoryResponseDTO, StoryReque
     StoryResponseDTO createStory(StoryRequestDTO dto);
     StoryResponseDTO updateStory(Long id, StoryRequestDTO dto);
     void deleteStory(Long id);
+    StoryEntity assignRandomAvailableStory(String username);
+    void unlockStory(Long storyId);
 }

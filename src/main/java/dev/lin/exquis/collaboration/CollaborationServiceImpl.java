@@ -44,7 +44,8 @@ public class CollaborationServiceImpl implements CollaborationService {
     @Override
     public CollaborationEntity createCollaboration(CollaborationRequestDTO request, String username) {
         // Buscar el usuario autenticado
-        UserEntity user = userRepository.findByUsername(username)
+        System.out.println(request.getStoryId());
+        UserEntity user = userRepository.findByEmail(username)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + username));
 
         // Buscar la historia

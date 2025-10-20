@@ -3,7 +3,11 @@ package dev.lin.exquis.story;
 import dev.lin.exquis.story.dtos.StoryRequestDTO;
 import dev.lin.exquis.story.dtos.StoryResponseDTO;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import java.util.List;
 
 @RestController
@@ -36,5 +40,17 @@ public class StoryController {
     @DeleteMapping("/{id}")
     public void deleteStory(@PathVariable Long id) {
         storyService.deleteStory(id);
+    }
+
+    @PostMapping("/assign")
+    public ResponseEntity<StoryEntity> assignStoryToUser(@AuthenticationPrincipal UserDetails userDetails) {
+        StoryEntity story = storyService.assignRandomAvailableStory(userDetails.getUsername());
+        return ResponseEntity.ok(story);
+    }
+
+    @PostMapping("/unlock/{storyId}")
+    public ResponseEntity<Void> unlockStory(@PathVariable Long storyId) {
+        storyService.unlockStory(storyId);
+        return ResponseEntity.ok().build();
     }
 }
