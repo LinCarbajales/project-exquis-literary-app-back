@@ -8,4 +8,5 @@ import java.util.List;
 public interface CollaborationRepository extends JpaRepository<CollaborationEntity, Long> {
     List<CollaborationEntity> findByStoryIdOrderByOrderNumberAsc(Long storyId);
     long countByStoryId(Long storyId);
+    List<CollaborationEntity> findByStoryIdOrderByOrderNumberDesc(Long storyId);
 }

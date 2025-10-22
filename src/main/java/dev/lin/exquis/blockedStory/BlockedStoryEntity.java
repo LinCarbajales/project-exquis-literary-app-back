@@ -4,6 +4,7 @@ import dev.lin.exquis.story.StoryEntity;
 import dev.lin.exquis.user.UserEntity;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -19,7 +20,7 @@ public class BlockedStoryEntity {
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "story_id", nullable = false, unique = true)
+    @JoinColumn(name = "story_id", nullable = false)
     private StoryEntity story;
 
     @ManyToOne(fetch = FetchType.LAZY)

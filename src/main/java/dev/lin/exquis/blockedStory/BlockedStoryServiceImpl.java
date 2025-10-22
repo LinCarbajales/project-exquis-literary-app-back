@@ -93,4 +93,9 @@ public class BlockedStoryServiceImpl implements BlockedStoryService {
         }
         blockedStoryRepository.deleteById(id);
     }
+
+    public void deleteByStoryId(Long storyId) {
+        System.out.println("DEBUG: Ejecutando DeleteByStoryId, redirigiendo a deleteEntity para ID: " + storyId);
+        deleteEntity(storyId);
+    }
 }

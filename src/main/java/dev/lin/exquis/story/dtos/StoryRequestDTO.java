@@ -1,8 +1,16 @@
 package dev.lin.exquis.story.dtos;
 
-public record StoryRequestDTO(
-    Integer extension,
-    Boolean finished,
-    String visibility
-) {
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class StoryRequestDTO {
+    private Integer extension;
+    private boolean finished;
+    private String visibility;
 }

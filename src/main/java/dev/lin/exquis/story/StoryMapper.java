@@ -8,27 +8,41 @@ import org.springframework.stereotype.Component;
 public class StoryMapper {
 
     public StoryEntity toEntity(StoryRequestDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+
         return StoryEntity.builder()
-                .extension(dto.extension())
-                .finished(dto.finished())
-                .visibility(dto.visibility())
+                .extension(dto.getExtension())
+                .finished(dto.isFinished())
+                .visibility(dto.getVisibility())
                 .build();
     }
 
     public StoryResponseDTO toResponseDTO(StoryEntity entity) {
-        return new StoryResponseDTO(
-                entity.getId(),
-                entity.getExtension(),
-                entity.isFinished(),
-                entity.getVisibility(),
-                entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
+        if (entity == null) {
+            return null;
+        }
+
+        return StoryResponseDTO.builder()
+                .id(entity.getId())
+                .extension(entity.getExtension())
+                .finished(entity.isFinished())
+                .visibility(entity.getVisibility())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
     }
 
     public void updateEntityFromDTO(StoryEntity entity, StoryRequestDTO dto) {
-        entity.setExtension(dto.extension());
-        entity.setFinished(dto.finished());
-        entity.setVisibility(dto.visibility());
+        if (dto == null || entity == null) return;
+
+        if (dto.getExtension() != null) {
+            entity.setExtension(dto.getExtension());
+        }
+        entity.setFinished(dto.isFinished());
+        if (dto.getVisibility() != null) {
+            entity.setVisibility(dto.getVisibility());
+        }
     }
 }

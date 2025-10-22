@@ -61,10 +61,15 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
                 .requestMatchers(HttpMethod.POST, endpoint + "/login").permitAll()
                 .requestMatchers(HttpMethod.POST, endpoint + "/logout").permitAll()
+                .requestMatchers(endpoint + "/stories/assign").permitAll()
+                .requestMatchers(endpoint + "/stories/unlock/**").permitAll()
+                .requestMatchers(endpoint + "/stories/blocked").permitAll()
                 
                 // 🔒 ENDPOINTS PROTEGIDOS - Requieren autenticación
                 .requestMatchers(endpoint + "/users/me/**").authenticated()
                 .requestMatchers(HttpMethod.POST, endpoint + "/stories/**").authenticated()
+                .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").authenticated()
+                .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
                 .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
                 .requestMatchers(endpoint + "/users/**").hasRole("ADMIN") // Solo admin puede ver todos los usuarios
                 
