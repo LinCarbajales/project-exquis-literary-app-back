@@ -2,6 +2,10 @@ package dev.lin.exquis.story;
 
 import dev.lin.exquis.blockedStory.BlockedStoryEntity;
 import dev.lin.exquis.blockedStory.BlockedStoryRepository;
+import dev.lin.exquis.collaboration.CollaborationEntity;
+import dev.lin.exquis.collaboration.CollaborationRepository;
+import dev.lin.exquis.collaboration.dtos.CollaborationResponseDTO;
+import dev.lin.exquis.story.dtos.StoryAssignmentResponseDTO;
 import dev.lin.exquis.story.dtos.StoryRequestDTO;
 import dev.lin.exquis.story.dtos.StoryResponseDTO;
 import dev.lin.exquis.user.UserEntity;
@@ -16,11 +20,11 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class StoryServiceImpl implements StoryService {
 
     private final StoryRepository storyRepository;
     private final BlockedStoryRepository blockedStoryRepository;
+    private final CollaborationRepository collaborationRepository;
     private final UserRepository userRepository;
 
     // ---------- CRUD (mapeos a DTOs) ----------
@@ -44,7 +48,7 @@ public class StoryServiceImpl implements StoryService {
     public StoryResponseDTO createStory(StoryRequestDTO dto) {
         StoryEntity entity = StoryEntity.builder()
                 .extension(dto.getExtension() != null ? dto.getExtension() : 10)
-                .finished(dto.isFinished())
+                .finished(dto.isFinished()) // ✅ sin null check
                 .visibility(dto.getVisibility() != null ? dto.getVisibility() : "private")
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -69,12 +73,10 @@ public class StoryServiceImpl implements StoryService {
         if (!storyRepository.existsById(id)) {
             throw new RuntimeException("Historia no encontrada: " + id);
         }
-        // eliminar bloqueo si existe
         blockedStoryRepository.deleteByStoryId(id);
         storyRepository.deleteById(id);
     }
 
-    // Métodos para cumplir IStoryService (alias a los métodos anteriores)
     @Override
     public List<StoryResponseDTO> getEntities() {
         return getStories();
@@ -103,62 +105,132 @@ public class StoryServiceImpl implements StoryService {
     // ---------- Asignación aleatoria y desbloqueo ----------
 
     @Override
-    public StoryEntity assignRandomAvailableStory(String username) {
-        // obtener IDs bloqueados (vigentes)
-        Set<Long> blockedIds = blockedStoryRepository.findAll()
-                .stream()
-                .filter(b -> b.getBlockedUntil().isAfter(LocalDateTime.now()))
-                .map(b -> b.getStory().getId())
-                .collect(Collectors.toSet());
-
-        // obtener historias no finalizadas
-        List<StoryEntity> candidates = storyRepository.findAll()
-                .stream()
-                .filter(s -> !s.isFinished())
-                .filter(s -> !blockedIds.contains(s.getId()))
-                .collect(Collectors.toList());
-
-        if (candidates.isEmpty()) {
-            throw new RuntimeException("No hay historias disponibles para colaborar.");
-        }
-
-        // elegir aleatoria
-        StoryEntity chosen = candidates.get(new Random().nextInt(candidates.size()));
-
-        // crear bloqueo en blocked_stories
-        UserEntity user = userRepository.findByEmail(username)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + username));
-
-        BlockedStoryEntity blocked = BlockedStoryEntity.builder()
-                .story(chosen)
-                .lockedBy(user)
-                .blockedUntil(LocalDateTime.now().plusMinutes(30))
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        blockedStoryRepository.save(blocked);
-
-        // devolver la historia (entidad completa) para que el frontend muestre datos
-        return chosen;
+@Transactional
+public StoryAssignmentResponseDTO assignRandomAvailableStory(String userEmail) {
+    System.out.println("🔍 Buscando historia disponible para: " + userEmail);
+    LocalDateTime now = LocalDateTime.now();
+    
+    // 🧹 PASO 1: Limpiar bloqueos expirados
+    int expiredCount = blockedStoryRepository.deleteExpiredBlocks(now);
+    if (expiredCount > 0) {
+        System.out.println("🧹 Eliminados " + expiredCount + " bloqueos expirados");
     }
+    
+    // 👤 PASO 2: Obtener usuario
+    UserEntity user = userRepository.findByEmail(userEmail)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + userEmail));
+
+    // ⚠️ PASO 3: Verificar si el usuario ya tiene una historia bloqueada
+    Optional<BlockedStoryEntity> existingBlock = blockedStoryRepository.findByUserEmail(userEmail);
+    if (existingBlock.isPresent()) {
+        BlockedStoryEntity block = existingBlock.get();
+        System.out.println("⚠️ El usuario ya tiene la historia " + block.getStory().getId() + " bloqueada");
+        throw new RuntimeException("Ya tienes una historia asignada. Complétala o abandónala primero.");
+    }
+
+    // 🔒 PASO 4: Obtener IDs de historias bloqueadas (vigentes)
+    Set<Long> blockedIds = blockedStoryRepository.findActiveBlocks(now)
+            .stream()
+            .map(b -> b.getStory().getId())
+            .collect(Collectors.toSet());
+
+    System.out.println("🔒 Historias actualmente bloqueadas: " + blockedIds);
+
+    // 📚 PASO 5: Obtener historias candidatas (no finalizadas y no bloqueadas)
+    List<StoryEntity> allCandidates = storyRepository.findAll()
+            .stream()
+            .filter(s -> !s.isFinished())
+            .filter(s -> !blockedIds.contains(s.getId()))
+            .collect(Collectors.toList());
+
+    System.out.println("📚 Historias candidatas totales: " + allCandidates.size());
+
+    // 🎯 PASO 6: Priorizar historias en progreso
+    List<StoryEntity> storiesInProgress = allCandidates.stream()
+            .filter(s -> {
+                long collabCount = collaborationRepository.countByStoryId(s.getId());
+                return collabCount > 0 && collabCount < s.getExtension();
+            })
+            .collect(Collectors.toList());
+
+    List<StoryEntity> newStories = allCandidates.stream()
+            .filter(s -> collaborationRepository.countByStoryId(s.getId()) == 0)
+            .collect(Collectors.toList());
+
+    System.out.println("📝 Historias en progreso: " + storiesInProgress.size());
+    System.out.println("🆕 Historias nuevas: " + newStories.size());
+
+    StoryEntity chosen;
+
+    if (!storiesInProgress.isEmpty()) {
+        chosen = storiesInProgress.get(new Random().nextInt(storiesInProgress.size()));
+        System.out.println("🎯 Historia en progreso elegida: " + chosen.getId());
+    } else if (!newStories.isEmpty()) {
+        chosen = newStories.get(new Random().nextInt(newStories.size()));
+        System.out.println("🆕 Historia nueva elegida: " + chosen.getId());
+    } else {
+        System.out.println("➕ Creando nueva historia...");
+        chosen = StoryEntity.builder()
+                .extension(10)
+                .finished(false)
+                .visibility("private")
+                .createdAt(now)
+                .build();
+        chosen = storyRepository.save(chosen);
+        System.out.println("✅ Nueva historia creada con ID: " + chosen.getId());
+    }
+
+    // 🔒 PASO 7: Bloquear la historia para el usuario
+    BlockedStoryEntity blocked = BlockedStoryEntity.builder()
+            .story(chosen)
+            .lockedBy(user)
+            .blockedUntil(now.plusMinutes(30))
+            .createdAt(now)
+            .build();
+
+    blockedStoryRepository.save(blocked);
+    System.out.println("🔒 Historia " + chosen.getId() + " bloqueada para " + userEmail + " hasta: " + blocked.getBlockedUntil());
+
+    // 📊 PASO 8: Obtener número de colaboración actual
+    int currentCollaborationNumber = (int) collaborationRepository.countByStoryId(chosen.getId()) + 1;
+
+    // 📖 PASO 9: Obtener la última colaboración (si existe)
+    CollaborationResponseDTO previousCollaboration = null;
+    if (currentCollaborationNumber > 1) {
+        List<CollaborationEntity> collaborations = collaborationRepository
+                .findByStoryIdOrderByOrderNumberDesc(chosen.getId());
+        if (!collaborations.isEmpty()) {
+            previousCollaboration = CollaborationResponseDTO.fromEntity(collaborations.get(0));
+        }
+    }
+
+    // 🎯 PASO 10: Construir y devolver respuesta
+    return StoryAssignmentResponseDTO.builder()
+            .storyId(chosen.getId())
+            .extension(chosen.getExtension())
+            .currentCollaborationNumber(currentCollaborationNumber)
+            .previousCollaboration(previousCollaboration)
+            .timeLimit(1800)
+            .build();
+}
 
     @Override
+    @Transactional
     public void unlockStory(Long storyId) {
-        // eliminar bloqueo (si existe)
+        System.out.println("🔓 Desbloqueando historia: " + storyId);
         blockedStoryRepository.deleteByStoryId(storyId);
-        // no cambiamos el objeto story (no asumimos campo blocked en StoryEntity)
     }
 
-    // ---------- helpers de mapeo ----------
+    // ---------- Helper de mapeo ----------
 
     private StoryResponseDTO toResponse(StoryEntity entity) {
-        return StoryResponseDTO.builder()
-                .id(entity.getId())
-                .extension(entity.getExtension())
-                .finished(entity.isFinished())
-                .visibility(entity.getVisibility())
-                .createdAt(entity.getCreatedAt())
-                .updatedAt(entity.getUpdatedAt())
-                .build();
+        return new StoryResponseDTO(
+                entity.getId(),
+                entity.getExtension(),
+                entity.isFinished(),
+                entity.getVisibility(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
     }
 }

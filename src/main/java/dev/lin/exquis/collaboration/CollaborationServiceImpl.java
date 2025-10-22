@@ -4,6 +4,7 @@ import dev.lin.exquis.collaboration.dtos.CollaborationRequestDTO;
 import dev.lin.exquis.collaboration.exceptions.CollaborationNotFoundException;
 import dev.lin.exquis.story.StoryEntity;
 import dev.lin.exquis.story.StoryRepository;
+import dev.lin.exquis.story.StoryService;
 import dev.lin.exquis.user.UserEntity;
 import dev.lin.exquis.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class CollaborationServiceImpl implements CollaborationService {
     private final CollaborationRepository collaborationRepository;
     private final UserRepository userRepository;
     private final StoryRepository storyRepository;
+    private final StoryService storyService;
 
     @Override
     public List<CollaborationEntity> getEntities() {
@@ -43,19 +45,14 @@ public class CollaborationServiceImpl implements CollaborationService {
 
     @Override
     public CollaborationEntity createCollaboration(CollaborationRequestDTO request, String username) {
-        // Buscar el usuario autenticado
-        System.out.println(request.getStoryId());
         UserEntity user = userRepository.findByEmail(username)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + username));
 
-        // Buscar la historia
         StoryEntity story = storyRepository.findById(request.getStoryId())
                 .orElseThrow(() -> new RuntimeException("Historia no encontrada: " + request.getStoryId()));
-
-        // Calcular el siguiente número de orden
+        System.out.println("=================================>" + request.getStoryId());
         int nextOrder = (int) (collaborationRepository.countByStoryId(request.getStoryId()) + 1);
 
-        // Crear la colaboración
         CollaborationEntity collaboration = CollaborationEntity.builder()
                 .text(request.getText())
                 .orderNumber(nextOrder)
@@ -64,7 +61,12 @@ public class CollaborationServiceImpl implements CollaborationService {
                 .user(user)
                 .build();
 
-        return collaborationRepository.save(collaboration);
+        CollaborationEntity saved = collaborationRepository.save(collaboration);
+
+        // ✅ Desbloquear historia al enviar la colaboración
+        storyService.unlockStory(story.getId());
+
+        return saved;
     }
 
     @Override

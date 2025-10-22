@@ -20,7 +20,7 @@ public class BlockedStoryEntity {
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "story_id", nullable = false, unique = true)
+    @JoinColumn(name = "story_id", nullable = false)
     private StoryEntity story;
 
     @ManyToOne(fetch = FetchType.LAZY)

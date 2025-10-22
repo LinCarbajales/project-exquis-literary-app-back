@@ -1,14 +1,21 @@
 package dev.lin.exquis.story;
 
+import dev.lin.exquis.blockedStory.BlockedStoryEntity;
+import dev.lin.exquis.story.dtos.StoryAssignmentResponseDTO;
 import dev.lin.exquis.story.dtos.StoryRequestDTO;
 import dev.lin.exquis.story.dtos.StoryResponseDTO;
+import dev.lin.exquis.blockedStory.BlockedStoryRepository;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("${api-endpoint}/stories")
@@ -16,6 +23,7 @@ import java.util.List;
 public class StoryController {
 
     private final StoryService storyService;
+    private final BlockedStoryRepository blockedStoryRepository;
 
     @GetMapping
     public List<StoryResponseDTO> getAllStories() {
@@ -42,15 +50,47 @@ public class StoryController {
         storyService.deleteStory(id);
     }
 
+    // ✅ Asignar historia disponible al usuario autenticado
     @PostMapping("/assign")
-    public ResponseEntity<StoryEntity> assignStoryToUser(@AuthenticationPrincipal UserDetails userDetails) {
-        StoryEntity story = storyService.assignRandomAvailableStory(userDetails.getUsername());
-        return ResponseEntity.ok(story);
+    public ResponseEntity<StoryAssignmentResponseDTO> assignStoryToUser(Authentication authentication) {
+        if (authentication == null) {
+            return ResponseEntity.status(401).build();
+        }
+        
+        String userEmail = authentication.getName();
+        System.out.println("🔍 Usuario autenticado: " + userEmail);
+        
+        StoryAssignmentResponseDTO assignment = storyService.assignRandomAvailableStory(userEmail);
+        return ResponseEntity.ok(assignment);
     }
 
+    // ✅ Desbloquear historia (cuando el usuario abandona o termina)
     @PostMapping("/unlock/{storyId}")
-    public ResponseEntity<Void> unlockStory(@PathVariable Long storyId) {
+    public ResponseEntity<Void> unlockStory(@PathVariable Long storyId, Authentication authentication) {
+        if (authentication == null) {
+            return ResponseEntity.status(401).build();
+        }
+        
         storyService.unlockStory(storyId);
         return ResponseEntity.ok().build();
     }
+
+    // 🔍 DEBUG: Ver historias bloqueadas (temporal - solo para desarrollo)
+@GetMapping("/blocked")
+public ResponseEntity<List<Map<String, Object>>> getBlockedStories() {
+    List<BlockedStoryEntity> blocked = blockedStoryRepository.findAll();
+    
+    List<Map<String, Object>> result = blocked.stream()
+        .map(b -> {
+            Map<String, Object> info = new HashMap<>();
+            info.put("storyId", b.getStory().getId());
+            info.put("lockedBy", b.getLockedBy().getEmail());
+            info.put("blockedUntil", b.getBlockedUntil().toString());
+            info.put("isExpired", b.getBlockedUntil().isBefore(LocalDateTime.now()));
+            return info;
+        })
+        .collect(Collectors.toList());
+    
+    return ResponseEntity.ok(result);
+}
 }
