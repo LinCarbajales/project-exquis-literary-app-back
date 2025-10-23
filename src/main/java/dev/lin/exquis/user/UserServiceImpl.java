@@ -1,5 +1,7 @@
 package dev.lin.exquis.user;
 
+import dev.lin.exquis.collaboration.CollaborationEntity;
+import dev.lin.exquis.collaboration.CollaborationRepository;
 import dev.lin.exquis.role.RoleEntity;
 import dev.lin.exquis.role.RoleRepository;
 import dev.lin.exquis.user.dtos.UserRequestDTO;
@@ -24,6 +26,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private CollaborationRepository collaborationRepository;
 
     @Override
     public UserResponseDTO registerUser(UserRequestDTO dto) {
@@ -125,11 +130,33 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void deleteByEmail(String email) {
-        UserEntity user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
-        userRepository.delete(user);
-        log.warn("Usuario {} eliminado mediante /me", email);
+    UserEntity user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+
+    // No permitir borrar al propio NoUser
+    if ("NoUser".equals(user.getUsername())) {
+        throw new RuntimeException("No se puede eliminar el usuario del sistema 'NoUser'");
     }
+
+    // 🔹 Obtener o crear NoUser
+    UserEntity noUser = getOrCreateNoUser();
+
+    // 🔹 Buscar colaboraciones del usuario
+    List<CollaborationEntity> collaborations = collaborationRepository.findAll().stream()
+            .filter(c -> c.getUser().getId().equals(user.getId()))
+            .toList();
+
+    if (!collaborations.isEmpty()) {
+        collaborations.forEach(c -> c.setUser(noUser));
+        collaborationRepository.saveAll(collaborations);
+        log.info("Reasignadas {} colaboraciones del usuario {} a NoUser", collaborations.size(), email);
+    }
+
+    // 🔹 Eliminar al usuario
+    userRepository.delete(user);
+    log.warn("Usuario {} eliminado (colaboraciones reasignadas a NoUser)", email);
+}
+
 
     /* ==========================================================
        🔹 MÉTODOS POR USERNAME (heredados de la interfaz)
@@ -206,5 +233,24 @@ public class UserServiceImpl implements UserService {
                 user.getSurname(),
                 roleNames
         );
+    }
+
+
+    // Método para crear NoUser y reasignarle colaboraciones al eliminar una cuenta
+
+    private UserEntity getOrCreateNoUser() {
+    return userRepository.findByUsername("NoUser")
+        .orElseGet(() -> {
+            UserEntity noUser = UserEntity.builder()
+                    .username("NoUser")
+                    .email("no-user@system.local")
+                    .name("Deleted")
+                    .surname("User")
+                    .password(passwordEncoder.encode("placeholder")) // nunca se usará
+                    .roles(Set.of(roleRepository.findByName("USER")
+                            .orElseThrow(() -> new RuntimeException("Rol USER no encontrado"))))
+                    .build();
+            return userRepository.save(noUser);
+        });
     }
 }

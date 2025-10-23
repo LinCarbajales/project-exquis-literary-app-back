@@ -64,6 +64,7 @@ public class SecurityConfiguration {
                 .requestMatchers(endpoint + "/stories/assign").permitAll()
                 .requestMatchers(endpoint + "/stories/unlock/**").permitAll()
                 .requestMatchers(endpoint + "/stories/blocked").permitAll()
+                .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").permitAll()
                 
                 // 🔒 ENDPOINTS PROTEGIDOS - Requieren autenticación
                 .requestMatchers(endpoint + "/users/me/**").authenticated()
