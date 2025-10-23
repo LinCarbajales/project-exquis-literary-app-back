@@ -50,6 +50,7 @@ public class CollaborationServiceImpl implements CollaborationService {
 
         StoryEntity story = storyRepository.findById(request.getStoryId())
                 .orElseThrow(() -> new RuntimeException("Historia no encontrada: " + request.getStoryId()));
+        
         System.out.println("=================================>" + request.getStoryId());
         int nextOrder = (int) (collaborationRepository.countByStoryId(request.getStoryId()) + 1);
 
@@ -62,6 +63,15 @@ public class CollaborationServiceImpl implements CollaborationService {
                 .build();
 
         CollaborationEntity saved = collaborationRepository.save(collaboration);
+
+        // ✅ Verificar si la historia debe marcarse como finalizada
+        long totalCollaborations = collaborationRepository.countByStoryId(story.getId());
+        if (totalCollaborations >= story.getExtension() && !story.isFinished()) {
+            System.out.println("✅ Historia " + story.getId() + " completada: " + totalCollaborations + "/" + story.getExtension());
+            story.setFinished(true);
+            story.setUpdatedAt(LocalDateTime.now());
+            storyRepository.save(story);
+        }
 
         // ✅ Desbloquear historia al enviar la colaboración
         storyService.unlockStory(story.getId());
