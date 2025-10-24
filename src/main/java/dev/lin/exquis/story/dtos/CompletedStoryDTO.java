@@ -1,5 +1,6 @@
 package dev.lin.exquis.story.dtos;
 
+import dev.lin.exquis.collaboration.dtos.CollaborationResponseDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,10 +12,11 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StoryResponseDTO {
+public class CompletedStoryDTO {
     private Long id;
     private Integer extension;
-    private boolean finished;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private CollaborationResponseDTO firstCollaboration;
+    private Integer totalCollaborations;
 }

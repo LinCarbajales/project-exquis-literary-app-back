@@ -1,5 +1,6 @@
 package dev.lin.exquis.story;
 
+import dev.lin.exquis.story.dtos.CompletedStoryDTO;
 import dev.lin.exquis.story.dtos.StoryAssignmentResponseDTO;
 import dev.lin.exquis.story.dtos.StoryRequestDTO;
 import dev.lin.exquis.story.dtos.StoryResponseDTO;
@@ -25,4 +26,7 @@ public interface StoryService {
     // Métodos de asignación y bloqueo
     StoryAssignmentResponseDTO assignRandomAvailableStory(String userEmail);
     void unlockStory(Long storyId);
+    
+    // ✅ Nuevo: Obtener historias completadas
+    List<CompletedStoryDTO> getCompletedStories();
 }

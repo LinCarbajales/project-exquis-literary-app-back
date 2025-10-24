@@ -1,6 +1,7 @@
 package dev.lin.exquis.collaboration;
 
 import dev.lin.exquis.collaboration.dtos.CollaborationRequestDTO;
+import dev.lin.exquis.collaboration.dtos.CollaborationResponseDTO;
 import dev.lin.exquis.collaboration.exceptions.CollaborationNotFoundException;
 import dev.lin.exquis.story.StoryEntity;
 import dev.lin.exquis.story.StoryRepository;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -102,7 +104,13 @@ public class CollaborationServiceImpl implements CollaborationService {
     }
 
     @Override
-    public List<CollaborationEntity> getCollaborationsByStory(Long storyId) {
-        return collaborationRepository.findByStoryIdOrderByOrderNumberAsc(storyId);
+    @Transactional(readOnly = true)
+    public List<CollaborationResponseDTO> getCollaborationsByStory(Long storyId) {
+        List<CollaborationEntity> collaborations = collaborationRepository
+                .findByStoryIdWithUserOrderByOrderNumberAsc(storyId);
+
+        return collaborations.stream()
+                .map(CollaborationResponseDTO::fromEntity)
+                .collect(Collectors.toList());
     }
 }

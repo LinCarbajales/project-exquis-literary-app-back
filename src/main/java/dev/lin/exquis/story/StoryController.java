@@ -1,6 +1,7 @@
 package dev.lin.exquis.story;
 
 import dev.lin.exquis.blockedStory.BlockedStoryEntity;
+import dev.lin.exquis.story.dtos.CompletedStoryDTO;
 import dev.lin.exquis.story.dtos.StoryAssignmentResponseDTO;
 import dev.lin.exquis.story.dtos.StoryRequestDTO;
 import dev.lin.exquis.story.dtos.StoryResponseDTO;
@@ -76,21 +77,27 @@ public class StoryController {
     }
 
     // 🔍 DEBUG: Ver historias bloqueadas (temporal - solo para desarrollo)
-@GetMapping("/blocked")
-public ResponseEntity<List<Map<String, Object>>> getBlockedStories() {
-    List<BlockedStoryEntity> blocked = blockedStoryRepository.findAll();
+    @GetMapping("/blocked")
+    public ResponseEntity<List<Map<String, Object>>> getBlockedStories() {
+        List<BlockedStoryEntity> blocked = blockedStoryRepository.findAll();
     
-    List<Map<String, Object>> result = blocked.stream()
-        .map(b -> {
-            Map<String, Object> info = new HashMap<>();
-            info.put("storyId", b.getStory().getId());
-            info.put("lockedBy", b.getLockedBy().getEmail());
-            info.put("blockedUntil", b.getBlockedUntil().toString());
-            info.put("isExpired", b.getBlockedUntil().isBefore(LocalDateTime.now()));
-            return info;
-        })
-        .collect(Collectors.toList());
+        List<Map<String, Object>> result = blocked.stream()
+            .map(b -> {
+                Map<String, Object> info = new HashMap<>();
+                info.put("storyId", b.getStory().getId());
+                info.put("lockedBy", b.getLockedBy().getEmail());
+                info.put("blockedUntil", b.getBlockedUntil().toString());
+                info.put("isExpired", b.getBlockedUntil().isBefore(LocalDateTime.now()));
+                return info;
+            })
+            .collect(Collectors.toList());
     
-    return ResponseEntity.ok(result);
-}
-}
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/completed")
+    public ResponseEntity<List<CompletedStoryDTO>> getCompletedStories() {
+        List<CompletedStoryDTO> completedStories = storyService.getCompletedStories();
+        return ResponseEntity.ok(completedStories);
+    }
+    }

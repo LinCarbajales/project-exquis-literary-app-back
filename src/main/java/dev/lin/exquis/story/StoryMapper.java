@@ -15,7 +15,6 @@ public class StoryMapper {
         return StoryEntity.builder()
                 .extension(dto.getExtension())
                 .finished(dto.isFinished())
-                .visibility(dto.getVisibility())
                 .build();
     }
 
@@ -28,7 +27,6 @@ public class StoryMapper {
                 .id(entity.getId())
                 .extension(entity.getExtension())
                 .finished(entity.isFinished())
-                .visibility(entity.getVisibility())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
@@ -41,8 +39,5 @@ public class StoryMapper {
             entity.setExtension(dto.getExtension());
         }
         entity.setFinished(dto.isFinished());
-        if (dto.getVisibility() != null) {
-            entity.setVisibility(dto.getVisibility());
-        }
     }
 }
