@@ -3,6 +3,8 @@ package dev.lin.exquis.collaboration;
 import dev.lin.exquis.collaboration.dtos.CollaborationRequestDTO;
 import dev.lin.exquis.collaboration.dtos.CollaborationResponseDTO;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -59,9 +61,8 @@ public class CollaborationController {
 
     // 🔹 Obtener todas las colaboraciones de una historia específica
     @GetMapping("/story/{storyId}")
-    public List<CollaborationResponseDTO> getCollaborationsByStory(@PathVariable Long storyId) {
-        return collaborationService.getCollaborationsByStory(storyId).stream()
-                .map(CollaborationResponseDTO::fromEntity)
-                .collect(Collectors.toList());
+    public ResponseEntity<List<CollaborationResponseDTO>> getCollaborationsByStory(@PathVariable Long storyId) {
+        List<CollaborationResponseDTO> dtos = collaborationService.getCollaborationsByStory(storyId);
+        return ResponseEntity.ok(dtos);
     }
 }

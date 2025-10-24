@@ -5,11 +5,14 @@ import dev.lin.exquis.blockedStory.BlockedStoryRepository;
 import dev.lin.exquis.collaboration.CollaborationEntity;
 import dev.lin.exquis.collaboration.CollaborationRepository;
 import dev.lin.exquis.collaboration.dtos.CollaborationResponseDTO;
+import dev.lin.exquis.story.dtos.CompletedStoryDTO;
 import dev.lin.exquis.story.dtos.StoryAssignmentResponseDTO;
 import dev.lin.exquis.story.dtos.StoryRequestDTO;
 import dev.lin.exquis.story.dtos.StoryResponseDTO;
 import dev.lin.exquis.user.UserEntity;
 import dev.lin.exquis.user.UserRepository;
+import dev.lin.exquis.story.dtos.CompletedStoryDTO;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,8 +51,7 @@ public class StoryServiceImpl implements StoryService {
     public StoryResponseDTO createStory(StoryRequestDTO dto) {
         StoryEntity entity = StoryEntity.builder()
                 .extension(dto.getExtension() != null ? dto.getExtension() : 10)
-                .finished(dto.isFinished()) // ✅ sin null check
-                .visibility(dto.getVisibility() != null ? dto.getVisibility() : "private")
+                .finished(dto.isFinished())
                 .createdAt(LocalDateTime.now())
                 .build();
         StoryEntity saved = storyRepository.save(entity);
@@ -62,7 +64,6 @@ public class StoryServiceImpl implements StoryService {
                 .orElseThrow(() -> new RuntimeException("Historia no encontrada: " + id));
         if (dto.getExtension() != null) story.setExtension(dto.getExtension());
         story.setFinished(dto.isFinished());
-        if (dto.getVisibility() != null) story.setVisibility(dto.getVisibility());
         story.setUpdatedAt(LocalDateTime.now());
         StoryEntity saved = storyRepository.save(story);
         return toResponse(saved);
@@ -173,7 +174,6 @@ public StoryAssignmentResponseDTO assignRandomAvailableStory(String userEmail) {
         chosen = StoryEntity.builder()
                 .extension(10)
                 .finished(false)
-                .visibility("private")
                 .createdAt(now)
                 .build();
         chosen = storyRepository.save(chosen);
@@ -228,9 +228,50 @@ public StoryAssignmentResponseDTO assignRandomAvailableStory(String userEmail) {
                 entity.getId(),
                 entity.getExtension(),
                 entity.isFinished(),
-                entity.getVisibility(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CompletedStoryDTO> getCompletedStories() {
+        System.out.println("📚 Obteniendo historias completadas...");
+    
+        // Obtener todas las historias finalizadas y públicas
+        List<StoryEntity> finishedStories = storyRepository.findAll()
+                .stream()
+                .filter(StoryEntity::isFinished)
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt())) // Más recientes primero
+                .collect(Collectors.toList());
+    
+        System.out.println("✅ Encontradas " + finishedStories.size() + " historias completadas");
+    
+        // Mapear a CompletedStoryDTO
+        return finishedStories.stream()
+                .map(story -> {
+                    // Obtener la primera colaboración (orden 1)
+                    List<CollaborationEntity> collaborations = collaborationRepository
+                            .findByStoryIdWithUserOrderByOrderNumberAsc(story.getId());
+                
+                    CollaborationResponseDTO firstCollab = null;
+                    if (!collaborations.isEmpty()) {
+                        firstCollab = CollaborationResponseDTO.fromEntity(collaborations.get(0));
+                    }
+                
+                    // Contar total de colaboraciones
+                    int totalCollabs = collaborations.size();
+                
+                    return CompletedStoryDTO.builder()
+                            .id(story.getId())
+                            .extension(story.getExtension())
+                            .createdAt(story.getCreatedAt())
+                            .updatedAt(story.getUpdatedAt())
+                            .firstCollaboration(firstCollab)
+                            .totalCollaborations(totalCollabs)
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 }

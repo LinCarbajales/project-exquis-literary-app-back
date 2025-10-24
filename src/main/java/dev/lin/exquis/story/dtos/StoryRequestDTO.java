@@ -12,5 +12,4 @@ import lombok.NoArgsConstructor;
 public class StoryRequestDTO {
     private Integer extension;
     private boolean finished;
-    private String visibility;
 }

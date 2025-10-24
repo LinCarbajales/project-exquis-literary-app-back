@@ -24,10 +24,6 @@ public class StoryEntity {
     @Builder.Default
     private boolean finished = false;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private String visibility = "private"; // 'private' o 'public'
-
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
