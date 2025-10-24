@@ -5,7 +5,6 @@ import dev.lin.exquis.collaboration.dtos.CollaborationResponseDTO;
 import dev.lin.exquis.collaboration.exceptions.CollaborationNotFoundException;
 import dev.lin.exquis.story.StoryEntity;
 import dev.lin.exquis.story.StoryRepository;
-import dev.lin.exquis.story.StoryService;
 import dev.lin.exquis.user.UserEntity;
 import dev.lin.exquis.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +23,6 @@ public class CollaborationServiceImpl implements CollaborationService {
     private final CollaborationRepository collaborationRepository;
     private final UserRepository userRepository;
     private final StoryRepository storyRepository;
-    private final StoryService storyService;
 
     @Override
     public List<CollaborationEntity> getEntities() {
@@ -45,6 +43,8 @@ public class CollaborationServiceImpl implements CollaborationService {
         return collaborationRepository.save(collaboration);
     }
 
+    // ✅ REEMPLAZAR el método createCollaboration() en CollaborationServiceImpl.java
+
     @Override
     public CollaborationEntity createCollaboration(CollaborationRequestDTO request, String username) {
         UserEntity user = userRepository.findByEmail(username)
@@ -52,8 +52,7 @@ public class CollaborationServiceImpl implements CollaborationService {
 
         StoryEntity story = storyRepository.findById(request.getStoryId())
                 .orElseThrow(() -> new RuntimeException("Historia no encontrada: " + request.getStoryId()));
-        
-        System.out.println("=================================>" + request.getStoryId());
+
         int nextOrder = (int) (collaborationRepository.countByStoryId(request.getStoryId()) + 1);
 
         CollaborationEntity collaboration = CollaborationEntity.builder()
@@ -74,9 +73,6 @@ public class CollaborationServiceImpl implements CollaborationService {
             story.setUpdatedAt(LocalDateTime.now());
             storyRepository.save(story);
         }
-
-        // ✅ Desbloquear historia al enviar la colaboración
-        storyService.unlockStory(story.getId());
 
         return saved;
     }
