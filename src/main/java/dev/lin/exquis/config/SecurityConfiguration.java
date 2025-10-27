@@ -4,6 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+
 import static org.springframework.security.config.Customizer.withDefaults;
 
 import org.springframework.security.authentication.AuthenticationManager;
@@ -15,6 +17,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import dev.lin.exquis.security.JpaUserDetailsService;
@@ -52,6 +55,13 @@ public class SecurityConfiguration {
             // --- Desactivar formulario de login por defecto ---
             .formLogin(form -> form.disable())
 
+            // 🔑 HABILITAR AUTENTICACIÓN BÁSICA (Basic Auth) para el login
+            .httpBasic(withDefaults())
+            // Deshabilita el "desafío" (challenge) para evitar el popup del navegador
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)) 
+            )
+
             // --- Autorización de endpoints ---
             .authorizeHttpRequests(auth -> auth
                 // Acceso público
@@ -59,20 +69,15 @@ public class SecurityConfiguration {
                 .requestMatchers("/error").permitAll()
 
                 .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
-                .requestMatchers(HttpMethod.POST, endpoint + "/login").permitAll()
-                .requestMatchers(HttpMethod.POST, endpoint + "/logout").permitAll()
-                .requestMatchers(endpoint + "/stories/assign").permitAll()
-                .requestMatchers(endpoint + "/stories/unlock/**").permitAll()
-                .requestMatchers(endpoint + "/stories/blocked").permitAll()
-                .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").permitAll()
+                .requestMatchers(HttpMethod.GET, endpoint + "/login").permitAll()
+                .requestMatchers(HttpMethod.GET, endpoint + "/logout").permitAll()
                 
                 // 🔒 ENDPOINTS PROTEGIDOS - Requieren autenticación
                 .requestMatchers(endpoint + "/users/me/**").authenticated()
                 .requestMatchers(HttpMethod.POST, endpoint + "/stories/**").authenticated()
                 .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").authenticated()
                 .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
-                .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
-                .requestMatchers(endpoint + "/users/**").hasRole("ADMIN") // Solo admin puede ver todos los usuarios
+                .requestMatchers(endpoint + "/users/**").hasRole("ADMIN")
                 
                 // Cualquier otro endpoint requiere autenticación
                 .anyRequest().authenticated()
