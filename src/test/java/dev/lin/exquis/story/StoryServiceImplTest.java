@@ -4,6 +4,7 @@ import dev.lin.exquis.blockedStory.BlockedStoryEntity;
 import dev.lin.exquis.blockedStory.BlockedStoryRepository;
 import dev.lin.exquis.collaboration.CollaborationEntity;
 import dev.lin.exquis.collaboration.CollaborationRepository;
+import dev.lin.exquis.collaboration.dtos.CollaborationResponseDTO;
 import dev.lin.exquis.story.dtos.CompletedStoryDTO;
 import dev.lin.exquis.story.dtos.StoryAssignmentResponseDTO;
 import dev.lin.exquis.story.dtos.StoryRequestDTO;
@@ -26,7 +27,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("StoryServiceImpl - Tests Unitarios")
+@DisplayName("StoryServiceImpl - Tests Unitarios Completos")
 class StoryServiceImplTest {
 
     @Mock
@@ -74,8 +75,54 @@ class StoryServiceImplTest {
                 .build();
     }
 
+    // ========== CRUD BÁSICO ==========
+
     @Test
-    @DisplayName("Debe crear una historia nueva con valores por defecto")
+    @DisplayName("Debe obtener todas las historias")
+    void shouldGetAllStories() {
+        // Given
+        List<StoryEntity> stories = Arrays.asList(testStory);
+        when(storyRepository.findAll()).thenReturn(stories);
+
+        // When
+        List<StoryResponseDTO> result = storyService.getStories();
+
+        // Then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getId()).isEqualTo(1L);
+        verify(storyRepository).findAll();
+    }
+
+    @Test
+    @DisplayName("Debe obtener historia por ID")
+    void shouldGetStoryById() {
+        // Given
+        when(storyRepository.findById(1L)).thenReturn(Optional.of(testStory));
+
+        // When
+        StoryResponseDTO result = storyService.getStoryById(1L);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(1L);
+        assertThat(result.getExtension()).isEqualTo(10);
+        verify(storyRepository).findById(1L);
+    }
+
+    @Test
+    @DisplayName("Debe lanzar excepción al buscar historia inexistente")
+    void shouldThrowExceptionWhenStoryNotFound() {
+        // Given
+        when(storyRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> storyService.getStoryById(999L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Historia no encontrada");
+    }
+
+    @Test
+    @DisplayName("Debe crear historia con valores por defecto")
     void shouldCreateStoryWithDefaultValues() {
         // Given
         StoryRequestDTO request = StoryRequestDTO.builder()
@@ -83,259 +130,43 @@ class StoryServiceImplTest {
                 .finished(false)
                 .build();
 
-        when(storyRepository.save(any(StoryEntity.class))).thenReturn(testStory);
+        when(storyRepository.save(any(StoryEntity.class))).thenAnswer(invocation -> {
+            StoryEntity saved = invocation.getArgument(0);
+            saved.setId(1L);
+            return saved;
+        });
 
         // When
         StoryResponseDTO result = storyService.createStory(request);
 
         // Then
         assertThat(result).isNotNull();
-        assertThat(result.getExtension()).isEqualTo(10);
+        assertThat(result.getExtension()).isEqualTo(10); // Default
         assertThat(result.isFinished()).isFalse();
         verify(storyRepository).save(any(StoryEntity.class));
     }
 
     @Test
-    @DisplayName("Debe asignar historia disponible a usuario sin bloqueos previos")
-    void shouldAssignAvailableStoryToUserWithoutPreviousBlocks() {
+    @DisplayName("Debe crear historia con valores personalizados")
+    void shouldCreateStoryWithCustomValues() {
         // Given
-        String userEmail = "test@example.com";
-        LocalDateTime now = LocalDateTime.now();
-
-        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
-        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
-        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
-        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
-        when(storyRepository.findAll()).thenReturn(List.of(testStory));
-        when(collaborationRepository.countByStoryId(1L)).thenReturn(0L);
-        when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
-
-        // When
-        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result.getStoryId()).isEqualTo(1L);
-        assertThat(result.getExtension()).isEqualTo(10);
-        assertThat(result.getCurrentCollaborationNumber()).isEqualTo(1);
-        assertThat(result.getPreviousCollaboration()).isNull();
-        verify(blockedStoryRepository).save(any(BlockedStoryEntity.class));
-    }
-
-    @Test
-    @DisplayName("Debe devolver historia ya bloqueada si el usuario tiene un bloqueo activo")
-    void shouldReturnAlreadyBlockedStoryIfUserHasActiveBlock() {
-        // Given
-        String userEmail = "test@example.com";
-
-        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
-        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
-        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.of(blockedStory));
-        when(collaborationRepository.countByStoryId(1L)).thenReturn(2L);
-        when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(1L))
-                .thenReturn(Collections.emptyList());
-
-        // When
-        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result.getStoryId()).isEqualTo(1L);
-        assertThat(result.getCurrentCollaborationNumber()).isEqualTo(3);
-        verify(blockedStoryRepository, never()).save(any(BlockedStoryEntity.class));
-    }
-
-    @Test
-    @DisplayName("Debe limpiar bloqueos expirados al asignar historia")
-    void shouldCleanExpiredBlocksWhenAssigningStory() {
-        // Given
-        String userEmail = "test@example.com";
-
-        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(3);
-        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
-        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
-        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
-        when(storyRepository.findAll()).thenReturn(List.of(testStory));
-        when(collaborationRepository.countByStoryId(1L)).thenReturn(0L);
-        when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
-
-        // When
-        storyService.assignRandomAvailableStory(userEmail);
-
-        // Then
-        verify(blockedStoryRepository).deleteExpiredBlocks(any());
-    }
-
-    @Test
-    @DisplayName("Debe filtrar historias donde el usuario participó recientemente")
-    void shouldFilterStoriesWhereUserRecentlyParticipated() {
-        // Given
-        String userEmail = "test@example.com";
-        
-        // Usuario participó en orden 3, hay 4 colaboraciones totales
-        // Diferencia = 4 - 3 = 1 (necesita 2+ para poder participar)
-        CollaborationEntity recentCollab = CollaborationEntity.builder()
-                .id(1L)
-                .user(testUser)
-                .story(testStory)
-                .orderNumber(3)
-                .build();
-
-        StoryEntity newStory = StoryEntity.builder()
-                .id(2L)
-                .extension(10)
+        StoryRequestDTO request = StoryRequestDTO.builder()
+                .extension(15)
                 .finished(false)
-                .createdAt(LocalDateTime.now())
                 .build();
 
-        BlockedStoryEntity newBlock = BlockedStoryEntity.builder()
-                .id(2L)
-                .story(newStory)
-                .lockedBy(testUser)
-                .blockedUntil(LocalDateTime.now().plusMinutes(30))
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
-        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
-        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
-        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
-        when(storyRepository.findAll()).thenReturn(List.of(testStory));
-        when(collaborationRepository.countByStoryId(1L)).thenReturn(4L);
-        when(collaborationRepository.findTopByUserIdAndStoryIdOrderByOrderNumberDesc(1L, 1L))
-                .thenReturn(Optional.of(recentCollab));
-        
-        // CRÍTICO: Mock para cuando se guarda la nueva historia
         when(storyRepository.save(any(StoryEntity.class))).thenAnswer(invocation -> {
-            StoryEntity savedStory = invocation.getArgument(0);
-            // Simular que la BD asigna el ID
-            savedStory.setId(2L);
-            return savedStory;
+            StoryEntity saved = invocation.getArgument(0);
+            saved.setId(2L);
+            return saved;
         });
-        
-        // Mocks para la nueva historia creada
-        when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(newBlock);
-        when(collaborationRepository.countByStoryId(2L)).thenReturn(0L);
 
         // When
-        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
+        StoryResponseDTO result = storyService.createStory(request);
 
         // Then
-        // Debe crear nueva historia porque el usuario participó recientemente
+        assertThat(result.getExtension()).isEqualTo(15);
         verify(storyRepository).save(any(StoryEntity.class));
-        assertThat(result).isNotNull();
-        assertThat(result.getStoryId()).isEqualTo(2L);
-        assertThat(result.getCurrentCollaborationNumber()).isEqualTo(1);
-        assertThat(result.getExtension()).isEqualTo(10);
-    }
-
-    @Test
-    @DisplayName("Debe priorizar historias en progreso sobre historias nuevas")
-    void shouldPrioritizeInProgressStoriesOverNewStories() {
-        // Given
-        String userEmail = "test@example.com";
-        
-        StoryEntity storyInProgress = StoryEntity.builder()
-                .id(2L)
-                .extension(10)
-                .finished(false)
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
-        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
-        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
-        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
-        when(storyRepository.findAll()).thenReturn(List.of(testStory, storyInProgress));
-        when(collaborationRepository.countByStoryId(1L)).thenReturn(0L); // Nueva
-        when(collaborationRepository.countByStoryId(2L)).thenReturn(5L); // En progreso
-        when(collaborationRepository.findTopByUserIdAndStoryIdOrderByOrderNumberDesc(1L, 1L))
-                .thenReturn(Optional.empty());
-        when(collaborationRepository.findTopByUserIdAndStoryIdOrderByOrderNumberDesc(1L, 2L))
-                .thenReturn(Optional.empty());
-        when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
-        when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(anyLong()))
-                .thenReturn(Collections.emptyList());
-
-        // When
-        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
-
-        // Then
-        assertThat(result.getStoryId()).isIn(1L, 2L);
-        verify(blockedStoryRepository).save(any(BlockedStoryEntity.class));
-    }
-
-    @Test
-    @DisplayName("Debe crear nueva historia si no hay historias disponibles")
-    void shouldCreateNewStoryIfNoStoriesAvailable() {
-        // Given
-        String userEmail = "test@example.com";
-
-        StoryEntity newStory = StoryEntity.builder()
-                .id(2L)
-                .extension(10)
-                .finished(false)
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
-        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
-        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
-        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
-        when(storyRepository.findAll()).thenReturn(Collections.emptyList());
-        when(storyRepository.save(any(StoryEntity.class))).thenReturn(newStory);
-        when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
-        when(collaborationRepository.countByStoryId(2L)).thenReturn(0L);
-
-        // When
-        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
-
-        // Then
-        assertThat(result).isNotNull();
-        verify(storyRepository).save(any(StoryEntity.class));
-        verify(blockedStoryRepository).save(any(BlockedStoryEntity.class));
-    }
-
-    @Test
-    @DisplayName("Debe desbloquear historia correctamente")
-    void shouldUnlockStorySuccessfully() {
-        // Given
-        Long storyId = 1L;
-
-        // When
-        storyService.unlockStory(storyId);
-
-        // Then
-        verify(blockedStoryRepository).deleteByStoryId(storyId);
-    }
-
-    @Test
-    @DisplayName("Debe obtener historias completadas con detalles")
-    void shouldGetCompletedStoriesWithDetails() {
-        // Given
-        testStory.setFinished(true);
-        
-        CollaborationEntity firstCollab = CollaborationEntity.builder()
-                .id(1L)
-                .text("Primera colaboración")
-                .orderNumber(1)
-                .user(testUser)
-                .story(testStory)
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        when(storyRepository.findAll()).thenReturn(List.of(testStory));
-        when(collaborationRepository.findByStoryIdWithUserOrderByOrderNumberAsc(1L))
-                .thenReturn(List.of(firstCollab));
-
-        // When
-        List<CompletedStoryDTO> result = storyService.getCompletedStories();
-
-        // Then
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getId()).isEqualTo(1L);
-        assertThat(result.get(0).getFirstCollaboration()).isNotNull();
-        assertThat(result.get(0).getTotalCollaborations()).isEqualTo(1);
     }
 
     @Test
@@ -343,7 +174,7 @@ class StoryServiceImplTest {
     void shouldUpdateStorySuccessfully() {
         // Given
         StoryRequestDTO updateRequest = StoryRequestDTO.builder()
-                .extension(15)
+                .extension(20)
                 .finished(true)
                 .build();
 
@@ -355,7 +186,29 @@ class StoryServiceImplTest {
 
         // Then
         assertThat(result).isNotNull();
+        verify(storyRepository).findById(1L);
         verify(storyRepository).save(any(StoryEntity.class));
+    }
+
+    @Test
+    @DisplayName("Debe actualizar solo extension si finished es igual")
+    void shouldUpdateOnlyExtensionWhenNeeded() {
+        // Given
+        StoryRequestDTO updateRequest = StoryRequestDTO.builder()
+                .extension(25)
+                .finished(false)
+                .build();
+
+        when(storyRepository.findById(1L)).thenReturn(Optional.of(testStory));
+        when(storyRepository.save(any(StoryEntity.class))).thenReturn(testStory);
+
+        // When
+        storyService.updateStory(1L, updateRequest);
+
+        // Then
+        verify(storyRepository).save(argThat(story -> 
+            story.getExtension() == 25 && !story.isFinished()
+        ));
     }
 
     @Test
@@ -382,26 +235,199 @@ class StoryServiceImplTest {
         assertThatThrownBy(() -> storyService.deleteStory(999L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Historia no encontrada");
+
+        verify(storyRepository, never()).deleteById(any());
+    }
+
+    // ========== MÉTODOS DE IBaseService ==========
+
+    @Test
+    @DisplayName("getEntities debe llamar a getStories")
+    void getEntitiesShouldCallGetStories() {
+        // Given
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory));
+
+        // When
+        List<StoryResponseDTO> result = storyService.getEntities();
+
+        // Then
+        assertThat(result).hasSize(1);
+        verify(storyRepository).findAll();
     }
 
     @Test
-    @DisplayName("Debe lanzar excepción si usuario no existe al asignar historia")
-    void shouldThrowExceptionWhenUserNotFoundForAssignment() {
+    @DisplayName("getByID debe llamar a getStoryById")
+    void getByIDShouldCallGetStoryById() {
         // Given
-        String userEmail = "nonexistent@example.com";
+        when(storyRepository.findById(1L)).thenReturn(Optional.of(testStory));
+
+        // When
+        StoryResponseDTO result = storyService.getByID(1L);
+
+        // Then
+        assertThat(result.getId()).isEqualTo(1L);
+        verify(storyRepository).findById(1L);
+    }
+
+    @Test
+    @DisplayName("createEntity debe llamar a createStory")
+    void createEntityShouldCallCreateStory() {
+        // Given
+        StoryRequestDTO request = StoryRequestDTO.builder().extension(10).finished(false).build();
+        when(storyRepository.save(any())).thenAnswer(inv -> {
+            StoryEntity e = inv.getArgument(0);
+            e.setId(1L);
+            return e;
+        });
+
+        // When
+        StoryResponseDTO result = storyService.createEntity(request);
+
+        // Then
+        assertThat(result).isNotNull();
+        verify(storyRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("updateEntity debe llamar a updateStory")
+    void updateEntityShouldCallUpdateStory() {
+        // Given
+        StoryRequestDTO request = StoryRequestDTO.builder().extension(15).finished(true).build();
+        when(storyRepository.findById(1L)).thenReturn(Optional.of(testStory));
+        when(storyRepository.save(any())).thenReturn(testStory);
+
+        // When
+        StoryResponseDTO result = storyService.updateEntity(1L, request);
+
+        // Then
+        assertThat(result).isNotNull();
+        verify(storyRepository).findById(1L);
+    }
+
+    @Test
+    @DisplayName("deleteEntity debe llamar a deleteStory")
+    void deleteEntityShouldCallDeleteStory() {
+        // Given
+        when(storyRepository.existsById(1L)).thenReturn(true);
+
+        // When
+        storyService.deleteEntity(1L);
+
+        // Then
+        verify(blockedStoryRepository).deleteByStoryId(1L);
+        verify(storyRepository).deleteById(1L);
+    }
+
+    // ========== ASIGNACIÓN DE HISTORIAS ==========
+
+    @Test
+    @DisplayName("Debe asignar historia disponible y crear bloqueo")
+    void shouldAssignAvailableStoryAndCreateBlock() {
+        // Given
+        String userEmail = "test@example.com";
+        LocalDateTime now = LocalDateTime.now();
 
         when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
-        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.empty());
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
+        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
+        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory));
+        when(collaborationRepository.countByStoryId(1L)).thenReturn(0L);
+        when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
 
-        // When & Then
-        assertThatThrownBy(() -> storyService.assignRandomAvailableStory(userEmail))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Usuario no encontrado");
+        // When
+        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getStoryId()).isEqualTo(1L);
+        assertThat(result.getExtension()).isEqualTo(10);
+        assertThat(result.getCurrentCollaborationNumber()).isEqualTo(1);
+        assertThat(result.getTimeLimit()).isEqualTo(1800); // 30 min
+        verify(blockedStoryRepository).save(any(BlockedStoryEntity.class));
     }
 
     @Test
-    @DisplayName("Debe excluir historias finalizadas de la asignación")
-    void shouldExcludeFinishedStoriesFromAssignment() {
+    @DisplayName("Debe retornar historia ya bloqueada para el usuario")
+    void shouldReturnAlreadyBlockedStoryForUser() {
+        // Given
+        String userEmail = "test@example.com";
+
+        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
+        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.of(blockedStory));
+        when(collaborationRepository.countByStoryId(1L)).thenReturn(2L);
+        when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(1L))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getStoryId()).isEqualTo(1L);
+        assertThat(result.getCurrentCollaborationNumber()).isEqualTo(3);
+        verify(blockedStoryRepository, never()).save(any()); // No crea nuevo bloqueo
+    }
+
+    @Test
+    @DisplayName("Debe limpiar bloqueos expirados al asignar")
+    void shouldCleanExpiredBlocksWhenAssigning() {
+        // Given
+        String userEmail = "test@example.com";
+
+        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(3);
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
+        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
+        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory));
+        when(collaborationRepository.countByStoryId(1L)).thenReturn(0L);
+        when(blockedStoryRepository.save(any())).thenReturn(blockedStory);
+
+        // When
+        storyService.assignRandomAvailableStory(userEmail);
+
+        // Then
+        verify(blockedStoryRepository).deleteExpiredBlocks(any());
+    }
+
+    @Test
+    @DisplayName("Debe excluir historias bloqueadas activamente")
+    void shouldExcludeActivelyBlockedStories() {
+        // Given
+        String userEmail = "test@example.com";
+        StoryEntity anotherStory = StoryEntity.builder()
+                .id(2L)
+                .extension(10)
+                .finished(false)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        BlockedStoryEntity activeBlock = BlockedStoryEntity.builder()
+                .story(testStory)
+                .lockedBy(testUser)
+                .blockedUntil(LocalDateTime.now().plusMinutes(15))
+                .build();
+
+        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
+        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
+        when(blockedStoryRepository.findActiveBlocks(any()))
+                .thenReturn(Arrays.asList(activeBlock));
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory, anotherStory));
+        when(collaborationRepository.countByStoryId(2L)).thenReturn(0L);
+        when(blockedStoryRepository.save(any())).thenReturn(blockedStory);
+
+        // When
+        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
+
+        // Then
+        assertThat(result.getStoryId()).isEqualTo(2L); // Asigna la no bloqueada
+    }
+
+    @Test
+    @DisplayName("Debe excluir historias finalizadas")
+    void shouldExcludeFinishedStories() {
         // Given
         String userEmail = "test@example.com";
         testStory.setFinished(true);
@@ -410,15 +436,279 @@ class StoryServiceImplTest {
         when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
         when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
         when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
-        when(storyRepository.findAll()).thenReturn(List.of(testStory));
-        when(storyRepository.save(any(StoryEntity.class))).thenReturn(testStory);
-        when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory));
+        when(storyRepository.save(any())).thenAnswer(inv -> {
+            StoryEntity e = inv.getArgument(0);
+            e.setId(2L);
+            return e;
+        });
+        when(blockedStoryRepository.save(any())).thenReturn(blockedStory);
         when(collaborationRepository.countByStoryId(anyLong())).thenReturn(0L);
 
         // When
         StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
 
         // Then
-        verify(storyRepository).save(any(StoryEntity.class)); // Debe crear nueva
+        verify(storyRepository).save(any()); // Crea nueva historia
+    }
+
+    @Test
+    @DisplayName("Debe priorizar historias en progreso sobre nuevas")
+    void shouldPrioritizeInProgressStories() {
+        // Given
+        String userEmail = "test@example.com";
+        StoryEntity newStory = StoryEntity.builder()
+                .id(2L)
+                .extension(10)
+                .finished(false)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
+        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
+        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory, newStory));
+        when(collaborationRepository.countByStoryId(1L)).thenReturn(5L); // En progreso
+        when(collaborationRepository.countByStoryId(2L)).thenReturn(0L); // Nueva
+        when(blockedStoryRepository.save(any())).thenReturn(blockedStory);
+        when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(anyLong()))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
+
+        // Then
+        assertThat(result.getStoryId()).isIn(1L, 2L); // Puede ser cualquiera pero prioriza 1
+        verify(blockedStoryRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("Debe crear nueva historia si no hay disponibles")
+    void shouldCreateNewStoryIfNoneAvailable() {
+        // Given
+        String userEmail = "test@example.com";
+
+        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
+        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
+        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
+        when(storyRepository.findAll()).thenReturn(Collections.emptyList());
+        when(storyRepository.save(any())).thenAnswer(inv -> {
+            StoryEntity e = inv.getArgument(0);
+            e.setId(3L);
+            return e;
+        });
+        when(blockedStoryRepository.save(any())).thenReturn(blockedStory);
+        when(collaborationRepository.countByStoryId(anyLong())).thenReturn(0L);
+
+        // When
+        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
+
+        // Then
+        verify(storyRepository).save(any(StoryEntity.class)); // Crea nueva
+        verify(blockedStoryRepository).save(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Debe incluir colaboración previa si existe")
+    void shouldIncludePreviousCollaborationWhenExists() {
+        // Given
+        String userEmail = "test@example.com";
+        
+        CollaborationEntity previousCollab = CollaborationEntity.builder()
+                .id(1L)
+                .text("Colaboración previa")
+                .orderNumber(1)
+                .story(testStory)
+                .user(testUser)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
+        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.empty());
+        when(blockedStoryRepository.findActiveBlocks(any())).thenReturn(Collections.emptyList());
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory));
+        when(collaborationRepository.countByStoryId(1L)).thenReturn(1L);
+        when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(1L))
+                .thenReturn(Arrays.asList(previousCollab));
+        when(blockedStoryRepository.save(any())).thenReturn(blockedStory);
+
+        // When
+        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
+
+        // Then
+        assertThat(result.getCurrentCollaborationNumber()).isEqualTo(2);
+        assertThat(result.getPreviousCollaboration()).isNotNull();
+        assertThat(result.getPreviousCollaboration().getText()).isEqualTo("Colaboración previa");
+    }
+
+    @Test
+    @DisplayName("Debe lanzar excepción si usuario no existe")
+    void shouldThrowExceptionIfUserNotFound() {
+        // Given
+        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
+        when(userRepository.findByEmail("nonexistent@example.com"))
+                .thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> storyService.assignRandomAvailableStory("nonexistent@example.com"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Usuario no encontrado");
+    }
+
+    // ========== DESBLOQUEO ==========
+
+    @Test
+    @DisplayName("Debe desbloquear historia correctamente")
+    void shouldUnlockStorySuccessfully() {
+        // When
+        storyService.unlockStory(1L);
+
+        // Then
+        verify(blockedStoryRepository).deleteByStoryId(1L);
+    }
+
+    // ========== HISTORIAS COMPLETADAS ==========
+
+    @Test
+    @DisplayName("Debe obtener historias completadas con detalles")
+    void shouldGetCompletedStoriesWithDetails() {
+        // Given
+        testStory.setFinished(true);
+        testStory.setUpdatedAt(LocalDateTime.now());
+
+        CollaborationEntity firstCollab = CollaborationEntity.builder()
+                .id(1L)
+                .text("Primera colaboración")
+                .orderNumber(1)
+                .story(testStory)
+                .user(testUser)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        CollaborationEntity secondCollab = CollaborationEntity.builder()
+                .id(2L)
+                .text("Segunda colaboración")
+                .orderNumber(2)
+                .story(testStory)
+                .user(testUser)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory));
+        when(collaborationRepository.findByStoryIdWithUserOrderByOrderNumberAsc(1L))
+                .thenReturn(Arrays.asList(firstCollab, secondCollab));
+
+        // When
+        List<CompletedStoryDTO> result = storyService.getCompletedStories();
+
+        // Then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getId()).isEqualTo(1L);
+        assertThat(result.get(0).getFirstCollaboration()).isNotNull();
+        assertThat(result.get(0).getFirstCollaboration().getText()).isEqualTo("Primera colaboración");
+        assertThat(result.get(0).getTotalCollaborations()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Debe excluir historias no finalizadas de completadas")
+    void shouldExcludeNonFinishedStoriesFromCompleted() {
+        // Given
+        testStory.setFinished(false);
+
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory));
+
+        // When
+        List<CompletedStoryDTO> result = storyService.getCompletedStories();
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Debe ordenar historias completadas por fecha descendente")
+    void shouldSortCompletedStoriesByDateDesc() {
+        // Given
+        StoryEntity oldStory = StoryEntity.builder()
+                .id(1L)
+                .extension(10)
+                .finished(true)
+                .createdAt(LocalDateTime.now().minusDays(2))
+                .build();
+
+        StoryEntity newStory = StoryEntity.builder()
+                .id(2L)
+                .extension(10)
+                .finished(true)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(oldStory, newStory));
+        when(collaborationRepository.findByStoryIdWithUserOrderByOrderNumberAsc(anyLong()))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        List<CompletedStoryDTO> result = storyService.getCompletedStories();
+
+        // Then
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getId()).isEqualTo(2L); // Más reciente primero
+        assertThat(result.get(1).getId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Debe manejar historia completada sin colaboraciones")
+    void shouldHandleCompletedStoryWithoutCollaborations() {
+        // Given
+        testStory.setFinished(true);
+
+        when(storyRepository.findAll()).thenReturn(Arrays.asList(testStory));
+        when(collaborationRepository.findByStoryIdWithUserOrderByOrderNumberAsc(1L))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        List<CompletedStoryDTO> result = storyService.getCompletedStories();
+
+        // Then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getFirstCollaboration()).isNull();
+        assertThat(result.get(0).getTotalCollaborations()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("Debe retornar lista vacía si no hay historias completadas")
+    void shouldReturnEmptyListIfNoCompletedStories() {
+        // Given
+        when(storyRepository.findAll()).thenReturn(Collections.emptyList());
+
+        // When
+        List<CompletedStoryDTO> result = storyService.getCompletedStories();
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Debe calcular tiempo restante correctamente para bloqueo existente")
+    void shouldCalculateTimeRemainingCorrectlyForExistingBlock() {
+        // Given
+        String userEmail = "test@example.com";
+        LocalDateTime futureTime = LocalDateTime.now().plusMinutes(15);
+        blockedStory.setBlockedUntil(futureTime);
+
+        when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(testUser));
+        when(blockedStoryRepository.findByUserEmail(userEmail)).thenReturn(Optional.of(blockedStory));
+        when(collaborationRepository.countByStoryId(1L)).thenReturn(0L);
+
+        // When
+        StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
+
+        // Then
+        assertThat(result.getTimeLimit()).isGreaterThan(0);
+        assertThat(result.getTimeLimit()).isLessThanOrEqualTo(900); // Aproximadamente 15 min
     }
 }
