@@ -76,6 +76,8 @@ public class SecurityConfiguration {
                 .requestMatchers(endpoint + "/users/me/**").authenticated()
                 .requestMatchers(HttpMethod.POST, endpoint + "/stories/**").authenticated()
                 .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").authenticated()
+                .requestMatchers(HttpMethod.GET, endpoint + "/blocked-stories/**").authenticated()
+                .requestMatchers(HttpMethod.POST, endpoint + "/blocked-stories/**").authenticated()
                 .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
                 .requestMatchers(endpoint + "/users/**").hasRole("ADMIN")
                 

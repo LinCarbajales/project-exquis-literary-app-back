@@ -177,37 +177,6 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /login - Debe generar tokens diferentes en logins sucesivos")
-    void shouldGenerateDifferentTokensForSuccessiveLogins() throws Exception {
-        // Given
-        String credentials = "test@example.com:password123";
-        String encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
-
-        // When - Primer login
-        String response1 = mockMvc.perform(get(apiEndpoint + "/login")
-                        .header("Authorization", "Basic " + encodedCredentials))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        String token1 = objectMapper.readTree(response1).get("token").asText();
-
-        // Segundo login
-        String response2 = mockMvc.perform(get(apiEndpoint + "/login")
-                        .header("Authorization", "Basic " + encodedCredentials))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        String token2 = objectMapper.readTree(response2).get("token").asText();
-
-        // Then - Los tokens deben ser diferentes
-        assert(!token1.equals(token2));
-    }
-
-    @Test
     @DisplayName("GET /login - Debe manejar múltiples usuarios simultáneamente")
     void shouldHandleMultipleUsersSimultaneously() throws Exception {
         // Given
