@@ -35,4 +35,5 @@ public interface BlockedStoryRepository extends JpaRepository<BlockedStoryEntity
     // ✅ NUEVO: Obtener bloqueos vigentes
     @Query("SELECT b FROM BlockedStoryEntity b WHERE b.blockedUntil > :now")
     List<BlockedStoryEntity> findActiveBlocks(@Param("now") LocalDateTime now);
+
 }
