@@ -1,7 +1,6 @@
 package dev.lin.exquis.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.lin.exquis.auth.dtos.LoginRequest;
 import dev.lin.exquis.role.RoleEntity;
 import dev.lin.exquis.role.RoleRepository;
 import dev.lin.exquis.user.UserEntity;
@@ -13,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -28,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
-@DisplayName("AuthController - Tests de Integración")
+@DisplayName("AuthController - Tests de Integración con Basic Auth")
 class AuthControllerIntegrationTest {
 
     @Autowired
@@ -77,15 +75,15 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /login - Debe autenticar usuario con credenciales válidas")
+    @DisplayName("GET /login - Debe autenticar usuario con credenciales válidas usando Basic Auth")
     void shouldAuthenticateWithValidCredentials() throws Exception {
         // Given
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
+        String credentials = "test@example.com:password123";
+        String encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
 
         // When & Then
-        mockMvc.perform((apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").exists())
                 .andExpect(jsonPath("$.user.id_user").value(testUser.getId()))
@@ -94,73 +92,81 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /login - Debe fallar con credenciales inválidas")
+    @DisplayName("GET /login - Debe fallar con credenciales inválidas")
     void shouldFailWithInvalidCredentials() throws Exception {
         // Given
-        LoginRequest request = new LoginRequest("test@example.com", "wrongpassword");
+        String credentials = "test@example.com:wrongpassword";
+        String encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
 
         // When & Then
-        mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    @DisplayName("POST /login - Debe fallar con email inexistente")
+    @DisplayName("GET /login - Debe fallar con email inexistente")
     void shouldFailWithNonExistentEmail() throws Exception {
         // Given
-        LoginRequest request = new LoginRequest("nonexistent@example.com", "password123");
+        String credentials = "nonexistent@example.com:password123";
+        String encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
 
         // When & Then
-        mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    @DisplayName("POST /login - Debe fallar con email vacío")
-    void shouldFailWithEmptyEmail() throws Exception {
-        // Given
-        LoginRequest request = new LoginRequest("", "password123");
+    @DisplayName("GET /login - Debe fallar sin header Authorization")
+    void shouldFailWithoutAuthorizationHeader() throws Exception {
+        // When & Then
+        mockMvc.perform(get(apiEndpoint + "/login"))
+                .andExpect(status().isBadRequest()); // Spring devuelve 400 cuando falta header requerido
+    }
+
+    @Test
+    @DisplayName("GET /login - Debe fallar con formato de Basic Auth incorrecto")
+    void shouldFailWithInvalidBasicAuthFormat() throws Exception {
+        // Given - Header sin "Basic " prefix
+        String encodedCredentials = java.util.Base64.getEncoder().encodeToString("test@example.com:password123".getBytes());
 
         // When & Then
-        mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", encodedCredentials))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Se requiere autenticación Basic"));
+    }
+
+    @Test
+    @DisplayName("GET /login - Debe fallar con credenciales mal formateadas")
+    void shouldFailWithMalformedCredentials() throws Exception {
+        // Given - Credenciales sin el formato email:password
+        String credentials = "malformed-credentials-without-colon";
+        String encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
+
+        // When & Then
+        mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    @DisplayName("POST /login - Debe fallar con contraseña vacía")
-    void shouldFailWithEmptyPassword() throws Exception {
-        // Given
-        LoginRequest request = new LoginRequest("test@example.com", "");
-
-        // When & Then
-        mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @DisplayName("POST /login - Token debe ser válido para autenticación")
+    @DisplayName("GET /login - Token debe ser válido para autenticación")
     void tokenShouldBeValidForAuthentication() throws Exception {
         // Given
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
+        String credentials = "test@example.com:password123";
+        String encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
 
         // When - Obtener token
-        String response = mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response = mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
-        // Extract token (simplified - in real scenario parse JSON properly)
+        // Extract token
         String token = objectMapper.readTree(response).get("token").asText();
 
         // Then - Usar token para acceder a endpoint protegido
@@ -171,15 +177,15 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /login - Debe generar tokens diferentes en logins sucesivos")
+    @DisplayName("GET /login - Debe generar tokens diferentes en logins sucesivos")
     void shouldGenerateDifferentTokensForSuccessiveLogins() throws Exception {
         // Given
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
+        String credentials = "test@example.com:password123";
+        String encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
 
         // When - Primer login
-        String response1 = mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response1 = mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -188,9 +194,8 @@ class AuthControllerIntegrationTest {
         String token1 = objectMapper.readTree(response1).get("token").asText();
 
         // Segundo login
-        String response2 = mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response2 = mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -203,7 +208,7 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /login - Debe manejar múltiples usuarios simultáneamente")
+    @DisplayName("GET /login - Debe manejar múltiples usuarios simultáneamente")
     void shouldHandleMultipleUsersSimultaneously() throws Exception {
         // Given
         UserEntity secondUser = UserEntity.builder()
@@ -216,39 +221,58 @@ class AuthControllerIntegrationTest {
                 .build();
         userRepository.save(secondUser);
 
-        LoginRequest request1 = new LoginRequest("test@example.com", "password123");
-        LoginRequest request2 = new LoginRequest("second@example.com", "password456");
+        String credentials1 = "test@example.com:password123";
+        String credentials2 = "second@example.com:password456";
+        String encodedCredentials1 = java.util.Base64.getEncoder().encodeToString(credentials1.getBytes());
+        String encodedCredentials2 = java.util.Base64.getEncoder().encodeToString(credentials2.getBytes());
 
         // When & Then - Login usuario 1
-        mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request1)))
+        mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials1))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.user.username").value("testuser"));
 
         // Login usuario 2
-        mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request2)))
+        mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials2))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.user.username").value("seconduser"));
     }
 
     @Test
-    @DisplayName("POST /login - Debe incluir todos los datos del usuario en respuesta")
+    @DisplayName("GET /login - Debe incluir todos los datos del usuario en respuesta")
     void shouldIncludeAllUserDataInResponse() throws Exception {
         // Given
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
+        String credentials = "test@example.com:password123";
+        String encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.getBytes());
 
         // When & Then
-        mockMvc.perform(post(apiEndpoint + "/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(get(apiEndpoint + "/login")
+                        .header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isNotEmpty())
                 .andExpect(jsonPath("$.user").exists())
                 .andExpect(jsonPath("$.user.id_user").exists())
                 .andExpect(jsonPath("$.user.username").exists())
                 .andExpect(jsonPath("$.user.email").exists());
+    }
+
+    @Test
+    @DisplayName("GET /logout - Debe retornar respuesta exitosa")
+    void shouldLogoutSuccessfully() throws Exception {
+        // When & Then
+        mockMvc.perform(get(apiEndpoint + "/logout"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Logout exitoso"))
+                .andExpect(jsonPath("$.status").value("success"));
+    }
+
+    @Test
+    @DisplayName("GET /logout - Debe funcionar sin autenticación")
+    void shouldLogoutWithoutAuthentication() throws Exception {
+        // When & Then - El logout no requiere autenticación
+        mockMvc.perform(get(apiEndpoint + "/logout"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").exists());
     }
 }

@@ -109,8 +109,6 @@ class StoryServiceImplTest {
         when(storyRepository.findAll()).thenReturn(List.of(testStory));
         when(collaborationRepository.countByStoryId(1L)).thenReturn(0L);
         when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
-        // when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(1L))
-        //        .thenReturn(Collections.emptyList());
 
         // When
         StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
@@ -160,8 +158,6 @@ class StoryServiceImplTest {
         when(storyRepository.findAll()).thenReturn(List.of(testStory));
         when(collaborationRepository.countByStoryId(1L)).thenReturn(0L);
         when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
-        when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(1L))
-                .thenReturn(Collections.emptyList());
 
         // When
         storyService.assignRandomAvailableStory(userEmail);
@@ -176,11 +172,28 @@ class StoryServiceImplTest {
         // Given
         String userEmail = "test@example.com";
         
+        // Usuario participó en orden 3, hay 4 colaboraciones totales
+        // Diferencia = 4 - 3 = 1 (necesita 2+ para poder participar)
         CollaborationEntity recentCollab = CollaborationEntity.builder()
                 .id(1L)
                 .user(testUser)
                 .story(testStory)
                 .orderNumber(3)
+                .build();
+
+        StoryEntity newStory = StoryEntity.builder()
+                .id(2L)
+                .extension(10)
+                .finished(false)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        BlockedStoryEntity newBlock = BlockedStoryEntity.builder()
+                .id(2L)
+                .story(newStory)
+                .lockedBy(testUser)
+                .blockedUntil(LocalDateTime.now().plusMinutes(30))
+                .createdAt(LocalDateTime.now())
                 .build();
 
         when(blockedStoryRepository.deleteExpiredBlocks(any())).thenReturn(0);
@@ -191,6 +204,18 @@ class StoryServiceImplTest {
         when(collaborationRepository.countByStoryId(1L)).thenReturn(4L);
         when(collaborationRepository.findTopByUserIdAndStoryIdOrderByOrderNumberDesc(1L, 1L))
                 .thenReturn(Optional.of(recentCollab));
+        
+        // CRÍTICO: Mock para cuando se guarda la nueva historia
+        when(storyRepository.save(any(StoryEntity.class))).thenAnswer(invocation -> {
+            StoryEntity savedStory = invocation.getArgument(0);
+            // Simular que la BD asigna el ID
+            savedStory.setId(2L);
+            return savedStory;
+        });
+        
+        // Mocks para la nueva historia creada
+        when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(newBlock);
+        when(collaborationRepository.countByStoryId(2L)).thenReturn(0L);
 
         // When
         StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
@@ -198,6 +223,10 @@ class StoryServiceImplTest {
         // Then
         // Debe crear nueva historia porque el usuario participó recientemente
         verify(storyRepository).save(any(StoryEntity.class));
+        assertThat(result).isNotNull();
+        assertThat(result.getStoryId()).isEqualTo(2L);
+        assertThat(result.getCurrentCollaborationNumber()).isEqualTo(1);
+        assertThat(result.getExtension()).isEqualTo(10);
     }
 
     @Test
@@ -257,8 +286,6 @@ class StoryServiceImplTest {
         when(storyRepository.save(any(StoryEntity.class))).thenReturn(newStory);
         when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
         when(collaborationRepository.countByStoryId(2L)).thenReturn(0L);
-        when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(2L))
-                .thenReturn(Collections.emptyList());
 
         // When
         StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);
@@ -387,8 +414,6 @@ class StoryServiceImplTest {
         when(storyRepository.save(any(StoryEntity.class))).thenReturn(testStory);
         when(blockedStoryRepository.save(any(BlockedStoryEntity.class))).thenReturn(blockedStory);
         when(collaborationRepository.countByStoryId(anyLong())).thenReturn(0L);
-        when(collaborationRepository.findByStoryIdOrderByOrderNumberDesc(anyLong()))
-                .thenReturn(Collections.emptyList());
 
         // When
         StoryAssignmentResponseDTO result = storyService.assignRandomAvailableStory(userEmail);

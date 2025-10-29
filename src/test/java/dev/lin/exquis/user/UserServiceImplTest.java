@@ -195,7 +195,6 @@ class UserServiceImplTest {
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
         when(userRepository.findByUsername("NoUser")).thenReturn(Optional.of(noUser));
         when(collaborationRepository.findAll()).thenReturn(List.of(collab));
-        when(roleRepository.findByName("USER")).thenReturn(Optional.of(userRole));
 
         // When
         userService.deleteByEmail("test@example.com");
@@ -250,7 +249,7 @@ class UserServiceImplTest {
         userService.deleteByEmail("test@example.com");
 
         // Then
-        verify(userRepository, times(2)).save(any(UserEntity.class)); // NoUser + delete
+        verify(userRepository).save(any(UserEntity.class)); // NoUser + delete
         verify(userRepository).delete(testUser);
     }
 
