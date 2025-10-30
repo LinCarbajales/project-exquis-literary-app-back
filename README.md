@@ -132,14 +132,10 @@ spring.datasource.password=your_password
 # API available at http://localhost:8080/api
 ```
 
-### Docker (Optional)
+### Docker
 
 ```bash
-# Build image
-docker build -t exquis-backend .
-
-# Run container
-docker run -p 8080:8080 exquis-backend
+docker compose up
 ```
 
 ---
@@ -254,7 +250,12 @@ POST /api/stories/unlock/{storyId}
 Authorization: Bearer {token}
 ```
 
-### Collaboration Endpoints
+### Postman Endpoints
+
+<img width="210" height="214" alt="image" src="https://github.com/user-attachments/assets/a4e38fb1-9dec-48a6-9f26-ace6f2234f60" />
+
+<img width="182" height="234" alt="image" src="https://github.com/user-attachments/assets/7a85c327-609f-4aaa-8fb6-b7959d4e1165" />
+
 
 #### Submit Collaboration
 ```http
