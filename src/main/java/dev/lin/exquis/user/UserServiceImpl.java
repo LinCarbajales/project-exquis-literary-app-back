@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // Importación necesaria
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -95,13 +96,15 @@ public class UserServiceImpl implements UserService {
         return mapToResponseDTO(updated);
     }
 
+    // 👑 MÉTODO DE ELIMINACIÓN POR ID (ADMIN PANEL) - AHORA REASIGNA COLABORACIONES
     @Override
+    @Transactional // Para asegurar que la reasignación y eliminación sean atómicas
     public void deleteEntity(Long id) {
-        if (!userRepository.existsById(id)) {
-            throw new RuntimeException("El usuario no existe");
-        }
-        userRepository.deleteById(id);
-        log.warn("Usuario con ID {} eliminado", id);
+        UserEntity user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("El usuario no existe"));
+        
+        deleteAndReassignCollaborations(user);
+        log.warn("Usuario con ID {} eliminado por Admin (colaboraciones reasignadas a NoUser)", id);
     }
 
     /* ==========================================================
@@ -128,34 +131,16 @@ public class UserServiceImpl implements UserService {
         return mapToResponseDTO(updated);
     }
 
+    // 🗑️ MÉTODO DE ELIMINACIÓN POR EMAIL (SELF-DELETE) - AHORA USA EL MÉTODO AUXILIAR
     @Override
+    @Transactional // Para asegurar que la reasignación y eliminación sean atómicas
     public void deleteByEmail(String email) {
-    UserEntity user = userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
 
-    // No permitir borrar al propio NoUser
-    if ("NoUser".equals(user.getUsername())) {
-        throw new RuntimeException("No se puede eliminar el usuario del sistema 'NoUser'");
+        deleteAndReassignCollaborations(user);
+        log.warn("Usuario {} eliminado (colaboraciones reasignadas a NoUser)", email);
     }
-
-    // 🔹 Obtener o crear NoUser
-    UserEntity noUser = getOrCreateNoUser();
-
-    // 🔹 Buscar colaboraciones del usuario
-    List<CollaborationEntity> collaborations = collaborationRepository.findAll().stream()
-            .filter(c -> c.getUser().getId().equals(user.getId()))
-            .toList();
-
-    if (!collaborations.isEmpty()) {
-        collaborations.forEach(c -> c.setUser(noUser));
-        collaborationRepository.saveAll(collaborations);
-        log.info("Reasignadas {} colaboraciones del usuario {} a NoUser", collaborations.size(), email);
-    }
-
-    // 🔹 Eliminar al usuario
-    userRepository.delete(user);
-    log.warn("Usuario {} eliminado (colaboraciones reasignadas a NoUser)", email);
-}
 
 
     /* ==========================================================
@@ -190,8 +175,39 @@ public class UserServiceImpl implements UserService {
     }
 
     /* ==========================================================
-       🔸 MÉTODO AUXILIAR COMPARTIDO
+       🔸 MÉTODOS AUXILIARES
        ========================================================== */
+
+    /**
+     * Lógica compartida para reasignar todas las colaboraciones de un usuario 
+     * al usuario de sistema 'NoUser' antes de eliminar la cuenta.
+     * @param userToDelete La entidad de usuario a eliminar.
+     */
+    private void deleteAndReassignCollaborations(UserEntity userToDelete) {
+        // No permitir borrar al propio NoUser
+        if ("NoUser".equals(userToDelete.getUsername())) {
+            throw new RuntimeException("No se puede eliminar el usuario del sistema 'NoUser'");
+        }
+
+        // 🔹 Obtener o crear NoUser
+        UserEntity noUser = getOrCreateNoUser();
+
+        // 🔹 Buscar colaboraciones del usuario (reutilizando el patrón existente)
+        List<CollaborationEntity> collaborations = collaborationRepository.findAll().stream()
+                .filter(c -> c.getUser().getId().equals(userToDelete.getId()))
+                .toList();
+
+        if (!collaborations.isEmpty()) {
+            collaborations.forEach(c -> c.setUser(noUser));
+            collaborationRepository.saveAll(collaborations);
+            log.info("Reasignadas {} colaboraciones del usuario {} a NoUser", collaborations.size(), userToDelete.getEmail());
+        }
+
+        // 🔹 Eliminar al usuario
+        userRepository.delete(userToDelete);
+    }
+
+
     private void updateUserFields(UserEntity user, UserRequestDTO dto) {
         if (dto.username() != null && !dto.username().isBlank()) {
             if (!user.getUsername().equals(dto.username()) && userRepository.existsByUsername(dto.username())) {

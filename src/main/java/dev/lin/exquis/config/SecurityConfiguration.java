@@ -64,26 +64,34 @@ public class SecurityConfiguration {
 
             // --- Autorización de endpoints ---
             .authorizeHttpRequests(auth -> auth
-                // Acceso público
-                .requestMatchers("/h2-console/**").permitAll()
-                .requestMatchers("/error").permitAll()
+            // Acceso público
+            .requestMatchers("/h2-console/**").permitAll()
+            .requestMatchers("/error").permitAll()
 
-                .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
-                .requestMatchers(HttpMethod.GET, endpoint + "/login").permitAll()
-                .requestMatchers(HttpMethod.GET, endpoint + "/logout").permitAll()
-                
-                // 🔒 ENDPOINTS PROTEGIDOS - Requieren autenticación
-                .requestMatchers(endpoint + "/users/me/**").authenticated()
-                .requestMatchers(HttpMethod.POST, endpoint + "/stories/**").authenticated()
-                .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").authenticated()
-                .requestMatchers(HttpMethod.GET, endpoint + "/blocked-stories/**").authenticated()
-                .requestMatchers(HttpMethod.POST, endpoint + "/blocked-stories/**").authenticated()
-                .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
-                .requestMatchers(endpoint + "/users/**").hasRole("ADMIN")
-                
-                // Cualquier otro endpoint requiere autenticación
-                .anyRequest().authenticated()
-            )
+            .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
+            .requestMatchers(HttpMethod.GET, endpoint + "/login").permitAll()
+            .requestMatchers(HttpMethod.GET, endpoint + "/logout").permitAll()
+            
+            // 👤 USERS - Las reglas MÁS ESPECÍFICAS primero
+            .requestMatchers(HttpMethod.DELETE, endpoint + "/users/me").authenticated()
+            .requestMatchers(endpoint + "/users/me/**").authenticated()
+            .requestMatchers(HttpMethod.DELETE, endpoint + "/users/**").hasRole("ADMIN")
+            .requestMatchers(endpoint + "/users/**").hasRole("ADMIN")
+            
+            // 📚 STORIES - Reglas específicas por método HTTP
+            .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").authenticated()
+            .requestMatchers(HttpMethod.POST, endpoint + "/stories/**").authenticated()
+            .requestMatchers(HttpMethod.PUT, endpoint + "/stories/**").hasRole("ADMIN")
+            .requestMatchers(HttpMethod.DELETE, endpoint + "/stories/**").hasRole("ADMIN")
+            
+            // 🔒 OTROS ENDPOINTS PROTEGIDOS
+            .requestMatchers(HttpMethod.GET, endpoint + "/blocked-stories/**").authenticated()
+            .requestMatchers(HttpMethod.POST, endpoint + "/blocked-stories/**").authenticated()
+            .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
+            
+            // Cualquier otro endpoint requiere autenticación
+            .anyRequest().authenticated()
+        )
 
             // --- Gestión de sesión: STATELESS ---
             .sessionManagement(session -> session
