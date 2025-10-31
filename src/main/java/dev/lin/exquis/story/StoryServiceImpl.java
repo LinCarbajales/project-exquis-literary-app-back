@@ -106,112 +106,145 @@ public class StoryServiceImpl implements StoryService {
 
     // ---------- Asignación aleatoria y desbloqueo ----------
 
-@Override
-@Transactional
-public StoryAssignmentResponseDTO assignRandomAvailableStory(String userEmail) {
-    System.out.println("🔍 Buscando historia disponible para: " + userEmail);
-    LocalDateTime now = LocalDateTime.now();
+    @Override
+    @Transactional
+    public StoryAssignmentResponseDTO assignRandomAvailableStory(String userEmail) {
+        System.out.println("🔍 Buscando historia disponible para: " + userEmail);
+        LocalDateTime now = LocalDateTime.now();
 
-    // 🧹 Limpiar bloqueos expirados
-    int expiredCount = blockedStoryRepository.deleteExpiredBlocks(now);
-    if (expiredCount > 0) {
-        System.out.println("🧹 Eliminados " + expiredCount + " bloqueos expirados");
-    }
+        // 🧹 Limpiar bloqueos expirados
+        int expiredCount = blockedStoryRepository.deleteExpiredBlocks(now);
+        if (expiredCount > 0) {
+            System.out.println("🧹 Eliminados " + expiredCount + " bloqueos expirados");
+        }
 
-    // 👤 Obtener usuario
-    UserEntity user = userRepository.findByEmail(userEmail)
-            .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + userEmail));
+        // 👤 Obtener usuario
+        UserEntity user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + userEmail));
 
-    // ⚠️ Verificar si el usuario ya tiene una historia bloqueada
-    Optional<BlockedStoryEntity> existingBlock = blockedStoryRepository.findByUserEmail(userEmail);
-    if (existingBlock.isPresent()) {
-        BlockedStoryEntity block = existingBlock.get();
-        StoryEntity blockedStory = block.getStory();
+        // ⚠️ Verificar si el usuario ya tiene una historia bloqueada
+        Optional<BlockedStoryEntity> existingBlock = blockedStoryRepository.findByUserEmail(userEmail);
+        if (existingBlock.isPresent()) {
+            BlockedStoryEntity block = existingBlock.get();
+            StoryEntity blockedStory = block.getStory();
 
-        int currentCollaborationNumber = (int) collaborationRepository.countByStoryId(blockedStory.getId()) + 1;
+            int currentCollaborationNumber = (int) collaborationRepository.countByStoryId(blockedStory.getId()) + 1;
+
+            CollaborationResponseDTO previousCollaboration = null;
+            if (currentCollaborationNumber > 1) {
+                List<CollaborationEntity> collaborations = collaborationRepository
+                        .findByStoryIdOrderByOrderNumberDesc(blockedStory.getId());
+                if (!collaborations.isEmpty()) {
+                    previousCollaboration = CollaborationResponseDTO.fromEntity(collaborations.get(0));
+                }
+            }
+
+            long secondsRemaining = Math.max(0, Duration.between(
+                    now.atZone(ZoneId.systemDefault()).toInstant(),
+                    block.getBlockedUntil().atZone(ZoneId.systemDefault()).toInstant()
+            ).getSeconds());
+
+            return StoryAssignmentResponseDTO.builder()
+                    .storyId(blockedStory.getId())
+                    .extension(blockedStory.getExtension())
+                    .currentCollaborationNumber(currentCollaborationNumber)
+                    .previousCollaboration(previousCollaboration)
+                    .timeLimit((int) secondsRemaining)
+                    .build();
+        }
+
+        // 🔒 Obtener historias candidatas
+        Set<Long> blockedIds = blockedStoryRepository.findActiveBlocks(now)
+                .stream().map(b -> b.getStory().getId()).collect(Collectors.toSet());
+
+        List<StoryEntity> allCandidates = storyRepository.findAll()
+                .stream()
+                .filter(s -> !s.isFinished() && !blockedIds.contains(s.getId()))
+                .collect(Collectors.toList());
+
+        // 🧩 Filtrar historias donde el usuario puede participar (mínimo 2 colaboraciones de otros desde la última)
+        List<StoryEntity> availableStories = allCandidates.stream()
+                .filter(s -> {
+                    Optional<CollaborationEntity> lastUserCollab = collaborationRepository
+                            .findTopByUserIdAndStoryIdOrderByOrderNumberDesc(user.getId(), s.getId());
+
+                    if (lastUserCollab.isEmpty()) {
+                        // Nunca colaboró → puede participar
+                        return true;
+                    }
+
+                    long currentTotal = collaborationRepository.countByStoryId(s.getId());
+                    int lastUserOrder = lastUserCollab.get().getOrderNumber();
+
+                    boolean canParticipate = currentTotal >= lastUserOrder + 2;
+
+                    if (!canParticipate) {
+                        System.out.println("❌ Historia " + s.getId() + " excluida: usuario participó en orden "
+                                + lastUserOrder + ", actual: " + currentTotal);
+                    }
+
+                    return canParticipate;
+                })
+                .collect(Collectors.toList());
+
+        // ⚙️ Separar historias según progreso
+        List<StoryEntity> storiesInProgress = availableStories.stream()
+                .filter(s -> collaborationRepository.countByStoryId(s.getId()) > 0 &&
+                        collaborationRepository.countByStoryId(s.getId()) < s.getExtension())
+                .collect(Collectors.toList());
+
+        List<StoryEntity> newStories = availableStories.stream()
+                .filter(s -> collaborationRepository.countByStoryId(s.getId()) == 0)
+                .collect(Collectors.toList());
+
+        // 🧠 Elegir historia disponible o crear una nueva si no hay
+        StoryEntity chosen;
+        if (!storiesInProgress.isEmpty()) {
+            chosen = storiesInProgress.get(new Random().nextInt(storiesInProgress.size()));
+        } else if (!newStories.isEmpty()) {
+            chosen = newStories.get(new Random().nextInt(newStories.size()));
+        } else {
+            // Si no hay historias válidas, crear una nueva
+            chosen = StoryEntity.builder()
+                    .extension(10)
+                    .finished(false)
+                    .createdAt(now)
+                    .build();
+            chosen = storyRepository.save(chosen);
+        }
+
+        // 🔒 Bloquear historia para el usuario
+        BlockedStoryEntity blocked = BlockedStoryEntity.builder()
+                .story(chosen)
+                .lockedBy(user)
+                .blockedUntil(now.plusMinutes(30))
+                .createdAt(now)
+                .build();
+        blockedStoryRepository.save(blocked);
+
+        int currentCollaborationNumber = (int) collaborationRepository.countByStoryId(chosen.getId()) + 1;
 
         CollaborationResponseDTO previousCollaboration = null;
         if (currentCollaborationNumber > 1) {
             List<CollaborationEntity> collaborations = collaborationRepository
-                    .findByStoryIdOrderByOrderNumberDesc(blockedStory.getId());
+                    .findByStoryIdOrderByOrderNumberDesc(chosen.getId());
             if (!collaborations.isEmpty()) {
                 previousCollaboration = CollaborationResponseDTO.fromEntity(collaborations.get(0));
             }
         }
 
-        // 🎯 Calcular tiempo restante en segundos usando Instant para evitar desfase de zona
-        long secondsRemaining = Math.max(0, Duration.between(
-                now.atZone(ZoneId.systemDefault()).toInstant(),
-                block.getBlockedUntil().atZone(ZoneId.systemDefault()).toInstant()
-        ).getSeconds());
+        // 🎯 Tiempo restante: siempre 30 minutos al crear un bloqueo nuevo
+        long secondsRemaining = 30 * 60;
 
         return StoryAssignmentResponseDTO.builder()
-                .storyId(blockedStory.getId())
-                .extension(blockedStory.getExtension())
+                .storyId(chosen.getId())
+                .extension(chosen.getExtension())
                 .currentCollaborationNumber(currentCollaborationNumber)
                 .previousCollaboration(previousCollaboration)
                 .timeLimit((int) secondsRemaining)
                 .build();
     }
 
-    // 🔒 Obtener historias candidatas y bloquear una nueva
-    Set<Long> blockedIds = blockedStoryRepository.findActiveBlocks(now)
-            .stream().map(b -> b.getStory().getId()).collect(Collectors.toSet());
-
-    List<StoryEntity> allCandidates = storyRepository.findAll()
-            .stream().filter(s -> !s.isFinished() && !blockedIds.contains(s.getId()))
-            .collect(Collectors.toList());
-
-    List<StoryEntity> storiesInProgress = allCandidates.stream()
-            .filter(s -> collaborationRepository.countByStoryId(s.getId()) > 0 &&
-                         collaborationRepository.countByStoryId(s.getId()) < s.getExtension())
-            .collect(Collectors.toList());
-
-    List<StoryEntity> newStories = allCandidates.stream()
-            .filter(s -> collaborationRepository.countByStoryId(s.getId()) == 0)
-            .collect(Collectors.toList());
-
-    StoryEntity chosen;
-    if (!storiesInProgress.isEmpty()) {
-        chosen = storiesInProgress.get(new Random().nextInt(storiesInProgress.size()));
-    } else if (!newStories.isEmpty()) {
-        chosen = newStories.get(new Random().nextInt(newStories.size()));
-    } else {
-        chosen = StoryEntity.builder().extension(10).finished(false).createdAt(now).build();
-        chosen = storyRepository.save(chosen);
-    }
-
-    // 🔒 Bloquear historia para el usuario
-    BlockedStoryEntity blocked = BlockedStoryEntity.builder()
-            .story(chosen)
-            .lockedBy(user)
-            .blockedUntil(now.plusMinutes(30))
-            .createdAt(now)
-            .build();
-    blockedStoryRepository.save(blocked);
-
-    int currentCollaborationNumber = (int) collaborationRepository.countByStoryId(chosen.getId()) + 1;
-
-    CollaborationResponseDTO previousCollaboration = null;
-    if (currentCollaborationNumber > 1) {
-        List<CollaborationEntity> collaborations = collaborationRepository
-                .findByStoryIdOrderByOrderNumberDesc(chosen.getId());
-        if (!collaborations.isEmpty()) {
-            previousCollaboration = CollaborationResponseDTO.fromEntity(collaborations.get(0));
-        }
-    }
-
-    // 🎯 Tiempo restante: siempre 30 minutos al crear un bloqueo nuevo
-    long secondsRemaining = 30 * 60;
-
-    return StoryAssignmentResponseDTO.builder()
-            .storyId(chosen.getId())
-            .extension(chosen.getExtension())
-            .currentCollaborationNumber(currentCollaborationNumber)
-            .previousCollaboration(previousCollaboration)
-            .timeLimit((int) secondsRemaining)
-            .build();
-}
 
 
     @Override
