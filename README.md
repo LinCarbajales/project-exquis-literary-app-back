@@ -59,51 +59,211 @@
 
 ## 🏗️ Architecture
 
-### Backend Stack
+### 🗄️ Entity Relationship
 
-```
-┌─────────────────────────────────────┐
-│         Spring Boot 3.x             │
-├─────────────────────────────────────┤
-│  Spring Security (JWT + Basic Auth) │
-│  Spring Data JPA (Hibernate)        │
-│  PostgreSQL / H2 (Testing)          │
-│  Lombok                              │
-│  Jackson (JSON)                      │
-└─────────────────────────────────────┘
+```mermaid
+erDiagram
+    USERS ||--o{ USER_ROLES : has
+    ROLES ||--o{ USER_ROLES : has
+    USERS ||--o{ COLLABORATIONS : creates
+    USERS ||--o{ BLOCKED_STORIES : locks
+    STORIES ||--o{ COLLABORATIONS : contains
+    STORIES ||--o| BLOCKED_STORIES : "is blocked by"
+
+    USERS {
+        bigint id_user PK
+        varchar username UK "unique, max 30 chars"
+        varchar email UK "unique, max 100 chars"
+        varchar password "bcrypt encrypted"
+        varchar name "max 50 chars"
+        varchar surname "max 50 chars"
+    }
+
+    ROLES {
+        bigint id_role PK
+        varchar name UK "USER, ADMIN"
+    }
+
+    USER_ROLES {
+        bigint user_id FK
+        bigint role_id FK
+    }
+
+    STORIES {
+        bigint id PK
+        integer extension "default 10"
+        boolean finished "default false"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    COLLABORATIONS {
+        bigint id PK
+        varchar text "40-260 chars"
+        integer order_number "sequential 1,2,3..."
+        timestamp created_at
+        bigint story_id FK
+        bigint user_id FK
+    }
+
+    BLOCKED_STORIES {
+        bigint id PK
+        timestamp blocked_until "30 min from creation"
+        timestamp created_at
+        bigint story_id FK "OneToOne"
+        bigint locked_by FK
+    }
 ```
 
-### Project Structure
+## 🏗️ Class Diagram
 
+```mermaid
+classDiagram
+    %% Entities
+    class UserEntity {
+        -Long id
+        -String username
+        -String name
+        -String surname
+        -String email
+        -String password
+        -Set~RoleEntity~ roles
+    }
+
+    class RoleEntity {
+        -Long id_role
+        -String name
+        -Set~UserEntity~ users
+    }
+
+    class StoryEntity {
+        -Long id
+        -Integer extension
+        -boolean finished
+        -LocalDateTime createdAt
+        -LocalDateTime updatedAt
+        +onUpdate()
+    }
+
+    class CollaborationEntity {
+        -Long id
+        -String text
+        -Integer orderNumber
+        -LocalDateTime createdAt
+        -StoryEntity story
+        -UserEntity user
+    }
+
+    class BlockedStoryEntity {
+        -Long id
+        -StoryEntity story
+        -UserEntity lockedBy
+        -LocalDateTime blockedUntil
+        -LocalDateTime createdAt
+    }
+
+    %% Services
+    class UserService {
+        <<interface>>
+        +registerUser(dto) UserResponseDTO
+        +getByEmail(email) UserResponseDTO
+        +updateByEmail(email, dto) UserResponseDTO
+        +deleteByEmail(email) void
+    }
+
+    class StoryService {
+        <<interface>>
+        +assignRandomAvailableStory(email) StoryAssignmentResponseDTO
+        +unlockStory(storyId) void
+        +getCompletedStories() List~CompletedStoryDTO~
+        +createStory(dto) StoryResponseDTO
+    }
+
+    class CollaborationService {
+        <<interface>>
+        +createCollaboration(dto, username) CollaborationEntity
+        +getCollaborationsByStory(storyId) List~CollaborationResponseDTO~
+    }
+
+    class BlockedStoryService {
+        <<interface>>
+        +blockStory(storyId, userId) BlockedStoryEntity
+        +unblockStory(storyId) void
+        +isStoryBlocked(storyId) boolean
+    }
+
+    %% Controllers
+    class UserController {
+        -UserService userService
+        +register(dto) UserResponseDTO
+        +getCurrentUser(principal) UserResponseDTO
+        +updateCurrentUser(principal, dto) UserResponseDTO
+        +deleteCurrentUser(principal) void
+    }
+
+    class StoryController {
+        -StoryService storyService
+        +assignStoryToUser(auth) StoryAssignmentResponseDTO
+        +unlockStory(storyId, auth) void
+        +getCompletedStories() List~CompletedStoryDTO~
+    }
+
+    class CollaborationController {
+        -CollaborationService collaborationService
+        +createCollaboration(dto, auth) CollaborationResponseDTO
+        +getCollaborationsByStory(storyId) List~CollaborationResponseDTO~
+    }
+
+    class AuthController {
+        -JwtService jwtService
+        -UserRepository userRepository
+        +login(authHeader) Map
+        +logout() Map
+    }
+
+    %% Security
+    class JwtService {
+        +generateToken(userId, email) String
+        +validateToken(token) boolean
+        +extractEmail(token) String
+    }
+
+    class SecurityConfig {
+        +securityFilterChain(http) SecurityFilterChain
+        +passwordEncoder() PasswordEncoder
+    }
+
+    %% Relationships - Entities
+    UserEntity "1" --o "*" CollaborationEntity : creates
+    UserEntity "*" --o "*" RoleEntity : has
+    UserEntity "1" --o "*" BlockedStoryEntity : locks
+    StoryEntity "1" --o "*" CollaborationEntity : contains
+    StoryEntity "1" --o "0..1" BlockedStoryEntity : blocked by
+
+    %% Relationships - Services to Entities
+    UserService ..> UserEntity : manages
+    UserService ..> RoleEntity : assigns
+    StoryService ..> StoryEntity : manages
+    StoryService ..> BlockedStoryEntity : creates/removes
+    CollaborationService ..> CollaborationEntity : manages
+    CollaborationService ..> StoryEntity : updates
+    BlockedStoryService ..> BlockedStoryEntity : manages
+
+    %% Relationships - Controllers to Services
+    UserController --> UserService : uses
+    StoryController --> StoryService : uses
+    CollaborationController --> CollaborationService : uses
+    AuthController --> JwtService : uses
+
+    %% Security relationships
+    SecurityConfig --> JwtService : configures
 ```
-src/main/java/dev/lin/exquis/
-├── auth/                   # Authentication & JWT
-│   ├── AuthController      # Login/Logout endpoints
-│   └── dtos/               # Login request/response DTOs
-├── security/               # Security configuration
-│   ├── JwtService          # JWT token generation/validation
-│   ├── SecurityConfig      # Spring Security setup
-│   └── SecurityUserDetailsService
-├── user/                   # User management
-│   ├── UserController      # User CRUD + /me endpoints
-│   ├── UserService         # Business logic
-│   └── UserEntity          # JPA entity
-├── story/                  # Story management
-│   ├── StoryController     # Story CRUD + assignment
-│   ├── StoryService        # Story logic & algorithms
-│   └── StoryEntity         # JPA entity
-├── collaboration/          # Contributions
-│   ├── CollaborationController
-│   ├── CollaborationService
-│   └── CollaborationEntity
-├── blockedStory/           # Locking system
-│   ├── BlockedStoryController
-│   ├── BlockedStoryService
-│   └── BlockedStoryEntity
-└── role/                   # User roles
-    ├── RoleEntity
-    └── RoleRepository
-```
+
+### Postman Endpoints
+
+<img width="210" height="214" alt="image" src="https://github.com/user-attachments/assets/a4e38fb1-9dec-48a6-9f26-ace6f2234f60" />
+
+<img width="182" height="234" alt="image" src="https://github.com/user-attachments/assets/7a85c327-609f-4aaa-8fb6-b7959d4e1165" />
 
 ---
 
@@ -249,13 +409,6 @@ Response:
 POST /api/stories/unlock/{storyId}
 Authorization: Bearer {token}
 ```
-
-### Postman Endpoints
-
-<img width="210" height="214" alt="image" src="https://github.com/user-attachments/assets/a4e38fb1-9dec-48a6-9f26-ace6f2234f60" />
-
-<img width="182" height="234" alt="image" src="https://github.com/user-attachments/assets/7a85c327-609f-4aaa-8fb6-b7959d4e1165" />
-
 
 #### Submit Collaboration
 ```http
