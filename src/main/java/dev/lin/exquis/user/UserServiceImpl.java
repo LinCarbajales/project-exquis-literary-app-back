@@ -6,6 +6,7 @@ import dev.lin.exquis.role.RoleEntity;
 import dev.lin.exquis.role.RoleRepository;
 import dev.lin.exquis.user.dtos.UserRequestDTO;
 import dev.lin.exquis.user.dtos.UserResponseDTO;
+import dev.lin.exquis.verificationToken.VerificationTokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +19,9 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class UserServiceImpl implements UserService {
+
+    @Autowired
+    private VerificationTokenService verificationTokenService;
 
     @Autowired
     private UserRepository userRepository;
@@ -41,7 +45,7 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("El seudónimo ya está en uso");
         }
 
-        log.info("Registrando nuevo usuario: {}", dto.username());
+        log.info("📝 Registrando nuevo usuario: {}", dto.username());
 
         UserEntity user = UserEntity.builder()
                 .username(dto.username())
@@ -49,6 +53,7 @@ public class UserServiceImpl implements UserService {
                 .password(passwordEncoder.encode(dto.password()))
                 .name(dto.name())
                 .surname(dto.surname())
+                .emailVerified(false) // 🔐 Usuario NO verificado al registrarse
                 .build();
 
         Set<RoleEntity> userRoles = new HashSet<>();
@@ -66,7 +71,17 @@ public class UserServiceImpl implements UserService {
         user.setRoles(userRoles);
 
         UserEntity savedUser = userRepository.save(user);
-        log.info("Usuario {} registrado con ID {}", savedUser.getUsername(), savedUser.getId());
+        log.info("✅ Usuario {} registrado con ID {}", savedUser.getUsername(), savedUser.getId());
+        
+        // 📧 ENVIAR EMAIL DE VERIFICACIÓN
+        try {
+            verificationTokenService.createAndSendVerificationToken(savedUser);
+            log.info("📧 Email de verificación enviado a: {}", savedUser.getEmail());
+        } catch (Exception e) {
+            log.error("❌ Error al enviar email de verificación: {}", e.getMessage());
+            // No lanzamos excepción para que el registro se complete igual
+        }
+        
         return mapToResponseDTO(savedUser);
     }
 

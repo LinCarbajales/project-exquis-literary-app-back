@@ -55,7 +55,7 @@ public class SecurityConfiguration {
             // --- Desactivar formulario de login por defecto ---
             .formLogin(form -> form.disable())
 
-            // 🔑 HABILITAR AUTENTICACIÓN BÁSICA (Basic Auth) para el login
+            // 🔒 HABILITAR AUTENTICACIÓN BÁSICA (Basic Auth) para el login
             .httpBasic(withDefaults())
             // Deshabilita el "desafío" (challenge) para evitar el popup del navegador
             .exceptionHandling(exceptions -> exceptions
@@ -64,34 +64,39 @@ public class SecurityConfiguration {
 
             // --- Autorización de endpoints ---
             .authorizeHttpRequests(auth -> auth
-            // Acceso público
-            .requestMatchers("/h2-console/**").permitAll()
-            .requestMatchers("/error").permitAll()
+                // Acceso público - H2 Console y errores
+                .requestMatchers("/h2-console/**").permitAll()
+                .requestMatchers("/error").permitAll()
 
-            .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
-            .requestMatchers(HttpMethod.GET, endpoint + "/login").permitAll()
-            .requestMatchers(HttpMethod.GET, endpoint + "/logout").permitAll()
-            
-            // 👤 USERS - Las reglas MÁS ESPECÍFICAS primero
-            .requestMatchers(HttpMethod.DELETE, endpoint + "/users/me").authenticated()
-            .requestMatchers(endpoint + "/users/me/**").authenticated()
-            .requestMatchers(HttpMethod.DELETE, endpoint + "/users/**").hasRole("ADMIN")
-            .requestMatchers(endpoint + "/users/**").hasRole("ADMIN")
-            
-            // 📚 STORIES - Reglas específicas por método HTTP
-            .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").authenticated()
-            .requestMatchers(HttpMethod.POST, endpoint + "/stories/**").authenticated()
-            .requestMatchers(HttpMethod.PUT, endpoint + "/stories/**").hasRole("ADMIN")
-            .requestMatchers(HttpMethod.DELETE, endpoint + "/stories/**").hasRole("ADMIN")
-            
-            // 🔒 OTROS ENDPOINTS PROTEGIDOS
-            .requestMatchers(HttpMethod.GET, endpoint + "/blocked-stories/**").authenticated()
-            .requestMatchers(HttpMethod.POST, endpoint + "/blocked-stories/**").authenticated()
-            .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
-            
-            // Cualquier otro endpoint requiere autenticación
-            .anyRequest().authenticated()
-        )
+                // 🆕 ENDPOINTS DE AUTENTICACIÓN - PÚBLICOS (ANTES DE TODO)
+                .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
+                .requestMatchers(HttpMethod.GET, endpoint + "/login").permitAll()
+                .requestMatchers(HttpMethod.GET, endpoint + "/logout").permitAll()
+                
+                // 🆕 ENDPOINTS DE VERIFICACIÓN DE EMAIL - PÚBLICOS
+                .requestMatchers(HttpMethod.GET, endpoint + "/verify-email/**").permitAll()
+                .requestMatchers(HttpMethod.POST, endpoint + "/resend-verification").permitAll()
+                
+                // 👤 USERS - Las reglas MÁS ESPECÍFICAS primero
+                .requestMatchers(HttpMethod.DELETE, endpoint + "/users/me").authenticated()
+                .requestMatchers(endpoint + "/users/me/**").authenticated()
+                .requestMatchers(HttpMethod.DELETE, endpoint + "/users/**").hasRole("ADMIN")
+                .requestMatchers(endpoint + "/users/**").hasRole("ADMIN")
+                
+                // 📚 STORIES - Reglas específicas por método HTTP
+                .requestMatchers(HttpMethod.GET, endpoint + "/stories/**").authenticated()
+                .requestMatchers(HttpMethod.POST, endpoint + "/stories/**").authenticated()
+                .requestMatchers(HttpMethod.PUT, endpoint + "/stories/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, endpoint + "/stories/**").hasRole("ADMIN")
+                
+                // 🔒 OTROS ENDPOINTS PROTEGIDOS
+                .requestMatchers(HttpMethod.GET, endpoint + "/blocked-stories/**").authenticated()
+                .requestMatchers(HttpMethod.POST, endpoint + "/blocked-stories/**").authenticated()
+                .requestMatchers(HttpMethod.POST, endpoint + "/collaborations/**").authenticated()
+                
+                // Cualquier otro endpoint requiere autenticación
+                .anyRequest().authenticated()
+            )
 
             // --- Gestión de sesión: STATELESS ---
             .sessionManagement(session -> session
