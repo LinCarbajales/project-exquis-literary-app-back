@@ -115,7 +115,7 @@ erDiagram
     }
 ```
 
-## 🏗️ Class Diagram
+### 🏗️ Class Diagram
 
 ```mermaid
 classDiagram
@@ -261,9 +261,9 @@ classDiagram
 
 ### Postman Endpoints
 
-<img width="210" height="214" alt="image" src="https://github.com/user-attachments/assets/a4e38fb1-9dec-48a6-9f26-ace6f2234f60" />
+<img width="130" height="143" alt="image" src="https://github.com/user-attachments/assets/81b7c7ec-7c74-4834-b3d2-1f554c9cac02" />
 
-<img width="182" height="234" alt="image" src="https://github.com/user-attachments/assets/7a85c327-609f-4aaa-8fb6-b7959d4e1165" />
+<img width="131" height="139" alt="image" src="https://github.com/user-attachments/assets/99dab1a8-ee6c-4c5a-aea1-b94fe92bd80c" />
 
 ---
 
