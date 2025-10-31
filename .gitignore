@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Excluir archivos de propiedades con variables de entorno
+env.properties
+*.env
