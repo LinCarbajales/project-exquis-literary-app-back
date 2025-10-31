@@ -267,39 +267,6 @@ classDiagram
 
 ---
 
-## 🚀 Installation
-
-### Prerequisites
-
-- **Java 17+**
-- **Maven 3.8+**
-
-### Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/exquis.git
-cd exquis
-
-# Configure database (application.properties)
-spring.datasource.url=jdbc:postgresql://localhost:5432/exquis
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-
-# Run the application
-./mvnw spring-boot:run
-
-# API available at http://localhost:8080/api
-```
-
-### Docker
-
-```bash
-docker compose up
-```
-
----
-
 ## 📡 API Documentation
 
 ### Authentication
