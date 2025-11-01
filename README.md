@@ -115,7 +115,7 @@ erDiagram
     }
 ```
 
-## 🏗️ Class Diagram
+### 🏗️ Class Diagram
 
 ```mermaid
 classDiagram
@@ -261,42 +261,9 @@ classDiagram
 
 ### Postman Endpoints
 
-<img width="210" height="214" alt="image" src="https://github.com/user-attachments/assets/a4e38fb1-9dec-48a6-9f26-ace6f2234f60" />
+<img width="130" height="143" alt="image" src="https://github.com/user-attachments/assets/81b7c7ec-7c74-4834-b3d2-1f554c9cac02" />
 
-<img width="182" height="234" alt="image" src="https://github.com/user-attachments/assets/7a85c327-609f-4aaa-8fb6-b7959d4e1165" />
-
----
-
-## 🚀 Installation
-
-### Prerequisites
-
-- **Java 17+**
-- **Maven 3.8+**
-
-### Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/exquis.git
-cd exquis
-
-# Configure database (application.properties)
-spring.datasource.url=jdbc:postgresql://localhost:5432/exquis
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-
-# Run the application
-./mvnw spring-boot:run
-
-# API available at http://localhost:8080/api
-```
-
-### Docker
-
-```bash
-docker compose up
-```
+<img width="131" height="139" alt="image" src="https://github.com/user-attachments/assets/99dab1a8-ee6c-4c5a-aea1-b94fe92bd80c" />
 
 ---
 
@@ -530,38 +497,8 @@ When a user deletes their account:
 1. **NoUser Creation** - System creates `@NoUser` if doesn't exist
 2. **Collaboration Reassignment** - All user's collaborations → `@NoUser`
 3. **Data Preservation** - Stories remain intact with placeholder user
-4. **Protection** - `@NoUser` account cannot be deleted
 
 ---
-
-## 📊 Database Schema
-
-```sql
-┌─────────────┐       ┌──────────────────┐       ┌─────────────┐
-│   users     │───────│  user_roles      │───────│   roles     │
-├─────────────┤       ├──────────────────┤       ├─────────────┤
-│ id_user (PK)│       │ user_id (FK)     │       │ id_role (PK)│
-│ username    │       │ role_id (FK)     │       │ name        │
-│ email       │       └──────────────────┘       └─────────────┘
-│ password    │
-│ name        │
-│ surname     │
-└─────────────┘
-       │
-       │ locked_by (FK)
-       │
-┌──────────────────┐       ┌─────────────────┐       ┌──────────────────┐
-│ blocked_stories  │       │    stories      │       │ collaborations   │
-├──────────────────┤       ├─────────────────┤       ├──────────────────┤
-│ id (PK)          │───────│ id (PK)         │───────│ id (PK)          │
-│ story_id (FK)    │       │ extension       │       │ text             │
-│ locked_by (FK)   │       │ finished        │       │ order_number     │
-│ blocked_until    │       │ created_at      │       │ story_id (FK)    │
-│ created_at       │       │ updated_at      │       │ user_id (FK)     │
-└──────────────────┘       └─────────────────┘       │ created_at       │
-                                                      └──────────────────┘
-```
-
 
 ## 🗺️ Roadmap
 
